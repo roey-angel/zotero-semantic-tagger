@@ -1,0 +1,15 @@
+# Synonym groups for Semantic Tagger
+# One group per line. Entries separated by semicolons.
+# The tool will treat all entries in a group as equivalent when matching.
+# Lines starting with # are ignored.
+
+Mats; biocrust; biological soil crust; cryptogam; biofilm
+CH4; methane; natural gas
+N2O; nitrous oxide; laughing gas
+CO2; carbon dioxide
+DOC; dissolved organic carbon
+SOM; soil organic matter; organic matter
+NPP; net primary production; net primary productivity
+GPP; gross primary production
+PAR; photosynthetically active radiation
+VOC; volatile organic compound; volatile organic compounds
