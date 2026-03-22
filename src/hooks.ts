@@ -14,6 +14,13 @@ async function onStartup() {
   initLocale();
   registerNotifier();
 
+  await Zotero.PreferencePanes.register({
+    pluginID: addon.data.config.addonID,
+    src: rootURI + "content/preferences.xhtml",
+    label: "Semantic Tagger",
+    image: `${rootURI}content/icons/favicon@0.5x.png`,
+  });
+
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
