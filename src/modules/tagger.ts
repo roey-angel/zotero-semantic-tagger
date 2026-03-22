@@ -1,10 +1,10 @@
 import { config } from "../../package.json";
 import { extractPdfText, getPdfPath, resolvePythonScript } from "./pdfExtractor";
+import { loadSynonyms } from "./synonyms";
 
 const TOKEN_WARN_THRESHOLD = 20_000;
 let _sessionTokens = 0;
 let _sessionPaused = false;
-import { loadSynonyms } from "./synonyms";
 
 const PREFS = config.prefsPrefix;
 
@@ -82,8 +82,8 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
 
   const synonymGroups = synonymFilePath ? await loadSynonyms(synonymFilePath) : [];
 
-  const { tags: matchedTags, inputTokens, outputTokens } = await queryClaudeForTags({
-    apiKey,
+  const { tags: matchedTags, inputTokens, outputTokens, apiError } = await queryClaudeForTags({
+    apiKey: apiKey.trim(),
     title,
     abstract,
     pdfText,
@@ -91,6 +91,8 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
     synonymGroups,
     strictness,
   });
+
+  if (apiError) return; // notification already shown inside queryClaudeForTags
 
   // Session token tracking
   _sessionTokens += inputTokens + outputTokens;
@@ -142,6 +144,7 @@ interface ClaudeTagResult {
   tags: string[];
   inputTokens: number;
   outputTokens: number;
+  apiError: boolean;
 }
 
 async function queryClaudeForTags(query: ClaudeTagQuery): Promise<ClaudeTagResult> {
@@ -177,32 +180,42 @@ RULES:
 
   const userMessage = `Tag library:\n${libraryTags.join("\n")}\n\n---\n\n${contentParts.join("\n\n")}`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 512,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    ztoolkit.log(`[SemanticTagger] Claude API error ${response.status}: ${err}`);
+  let xhr: XMLHttpRequest;
+  try {
+    xhr = await Zotero.HTTP.request("POST", "https://api.anthropic.com/v1/messages", {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+      successCodes: false,
+      timeout: 60_000,
+    });
+  } catch (e) {
+    ztoolkit.log(`[SemanticTagger] Network error calling Claude API: ${e}`);
     new ztoolkit.ProgressWindow(addon.data.config.addonName)
-      .createLine({ text: `Claude API error ${response.status} — check your API key`, type: "fail" })
+      .createLine({ text: "Network error — could not reach Claude API", type: "fail" })
       .show()
       .startCloseTimer(6000);
-    return { tags: [], inputTokens: 0, outputTokens: 0 };
+    return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
   }
 
-  const data = (await response.json()) as unknown as Record<string, unknown>;
+  if (xhr.status !== 200) {
+    ztoolkit.log(`[SemanticTagger] Claude API error ${xhr.status}: ${xhr.responseText}`);
+    new ztoolkit.ProgressWindow(addon.data.config.addonName)
+      .createLine({ text: `Claude API error ${xhr.status} — check your API key`, type: "fail" })
+      .show()
+      .startCloseTimer(6000);
+    return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
+  }
+
+  const data = JSON.parse(xhr.responseText ?? "{}") as Record<string, unknown>;
   const usage = data?.usage as { input_tokens?: number; output_tokens?: number } | undefined;
   const inputTokens = usage?.input_tokens ?? 0;
   const outputTokens = usage?.output_tokens ?? 0;
@@ -213,11 +226,11 @@ RULES:
   try {
     // Extract JSON array from response (may be wrapped in markdown)
     const match = text.match(/\[[\s\S]*\]/);
-    if (!match) return { tags: [], inputTokens, outputTokens };
+    if (!match) return { tags: [], inputTokens, outputTokens, apiError: false };
     const tags = JSON.parse(match[0]) as string[];
-    return { tags, inputTokens, outputTokens };
+    return { tags, inputTokens, outputTokens, apiError: false };
   } catch {
     ztoolkit.log(`[SemanticTagger] Failed to parse Claude response: ${text}`);
-    return { tags: [], inputTokens, outputTokens };
+    return { tags: [], inputTokens, outputTokens, apiError: false };
   }
 }
