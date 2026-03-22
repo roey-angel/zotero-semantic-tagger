@@ -3,13 +3,32 @@ import { config } from "../../package.json";
 const PREFS = config.prefsPrefix;
 const REF = config.addonRef;
 
+// html:input elements are NOT auto-bound by Zotero's preference system —
+// only XUL elements (checkbox, textbox, menulist) are. We must load and save
+// all html:input values explicitly.
+
 export async function registerPrefsScripts(_window: Window) {
+  loadPrefs(_window);
   bindPrefEvents(_window);
+}
+
+function loadPrefs(win: Window) {
+  const doc = win.document;
+
+  setInput(doc, `zotero-prefpane-${REF}-apikey`, Zotero.Prefs.get(`${PREFS}.apiKey`, true) as string ?? "");
+  setInput(doc, `zotero-prefpane-${REF}-strictness`, String(Zotero.Prefs.get(`${PREFS}.strictness`, true) ?? 50));
+  setInput(doc, `${REF}-synonyms-path`, Zotero.Prefs.get(`${PREFS}.synonymFile`, true) as string ?? "");
+  setInput(doc, `zotero-prefpane-${REF}-python`, Zotero.Prefs.get(`${PREFS}.pythonPath`, true) as string ?? "");
+  setInput(doc, `${REF}-script-path`, Zotero.Prefs.get(`${PREFS}.scriptPath`, true) as string ?? "");
+}
+
+function setInput(doc: Document, id: string, value: string) {
+  const el = doc.getElementById(id) as HTMLInputElement | null;
+  if (el) el.value = value;
 }
 
 async function pickFile(win: Window, title: string): Promise<string | null> {
   const fp = Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
-  // browsingContext is required in newer Gecko
   fp.init((win as any).browsingContext ?? win, title, Ci.nsIFilePicker.modeOpen);
   fp.appendFilters(Ci.nsIFilePicker.filterAll!);
   const rv: number = await new Promise((resolve) =>
@@ -24,14 +43,33 @@ async function pickFile(win: Window, title: string): Promise<string | null> {
 function bindPrefEvents(win: Window) {
   const doc = win.document;
 
+  // API key
+  doc.getElementById(`zotero-prefpane-${REF}-apikey`)?.addEventListener("change", (e: Event) => {
+    Zotero.Prefs.set(`${PREFS}.apiKey`, (e.target as HTMLInputElement).value, true);
+  });
+
+  // Strictness slider
+  doc.getElementById(`zotero-prefpane-${REF}-strictness`)?.addEventListener("change", (e: Event) => {
+    Zotero.Prefs.set(`${PREFS}.strictness`, parseInt((e.target as HTMLInputElement).value, 10), true);
+  });
+
+  // Python path
+  doc.getElementById(`zotero-prefpane-${REF}-python`)?.addEventListener("change", (e: Event) => {
+    Zotero.Prefs.set(`${PREFS}.pythonPath`, (e.target as HTMLInputElement).value, true);
+  });
+
   // Browse button for synonym file
   doc.querySelector(`#${REF}-synonyms-browse`)?.addEventListener("click", async () => {
     const path = await pickFile(win, "Select synonym file");
     if (path) {
       Zotero.Prefs.set(`${PREFS}.synonymFile`, path, true);
-      const input = doc.querySelector(`#${REF}-synonyms-path`) as HTMLInputElement | null;
-      if (input) input.value = path;
+      setInput(doc, `${REF}-synonyms-path`, path);
     }
+  });
+
+  // Synonym path (typed directly)
+  doc.getElementById(`${REF}-synonyms-path`)?.addEventListener("change", (e: Event) => {
+    Zotero.Prefs.set(`${PREFS}.synonymFile`, (e.target as HTMLInputElement).value, true);
   });
 
   // Browse button for extract_pdf.py script
@@ -39,8 +77,12 @@ function bindPrefEvents(win: Window) {
     const path = await pickFile(win, "Select extract_pdf.py script");
     if (path) {
       Zotero.Prefs.set(`${PREFS}.scriptPath`, path, true);
-      const input = doc.querySelector(`#${REF}-script-path`) as HTMLInputElement | null;
-      if (input) input.value = path;
+      setInput(doc, `${REF}-script-path`, path);
     }
+  });
+
+  // Script path (typed directly)
+  doc.getElementById(`${REF}-script-path`)?.addEventListener("change", (e: Event) => {
+    Zotero.Prefs.set(`${PREFS}.scriptPath`, (e.target as HTMLInputElement).value, true);
   });
 }

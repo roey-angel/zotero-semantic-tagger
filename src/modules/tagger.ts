@@ -33,7 +33,10 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
 
   const apiKey = Zotero.Prefs.get(`${PREFS}.apiKey`, true) as string;
   if (!apiKey) {
-    ztoolkit.log("[SemanticTagger] No Claude API key configured, skipping.");
+    new ztoolkit.ProgressWindow(addon.data.config.addonName)
+      .createLine({ text: "No API key set — open Settings → Semantic Tagger", type: "fail" })
+      .show()
+      .startCloseTimer(6000);
     return;
   }
 
@@ -70,7 +73,10 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
 
   const libraryTags = await getLibraryTags();
   if (libraryTags.length === 0) {
-    ztoolkit.log("[SemanticTagger] Tag library is empty, skipping.");
+    new ztoolkit.ProgressWindow(addon.data.config.addonName)
+      .createLine({ text: "No tags in library — add tags to Zotero first", type: "fail" })
+      .show()
+      .startCloseTimer(6000);
     return;
   }
 
@@ -99,7 +105,10 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
   }
 
   if (matchedTags.length === 0) {
-    ztoolkit.log(`[SemanticTagger] Item ${item.id}: no tags matched.`);
+    new ztoolkit.ProgressWindow(addon.data.config.addonName)
+      .createLine({ text: "No matching tags found in your library", type: "default" })
+      .show()
+      .startCloseTimer(4000);
     return;
   }
 
@@ -186,6 +195,10 @@ RULES:
   if (!response.ok) {
     const err = await response.text();
     ztoolkit.log(`[SemanticTagger] Claude API error ${response.status}: ${err}`);
+    new ztoolkit.ProgressWindow(addon.data.config.addonName)
+      .createLine({ text: `Claude API error ${response.status} — check your API key`, type: "fail" })
+      .show()
+      .startCloseTimer(6000);
     return { tags: [], inputTokens: 0, outputTokens: 0 };
   }
 
