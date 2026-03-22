@@ -180,38 +180,47 @@ RULES:
 
   const userMessage = `Tag library:\n${libraryTags.join("\n")}\n\n---\n\n${contentParts.join("\n\n")}`;
 
-  let xhr: XMLHttpRequest;
-  try {
-    xhr = await Zotero.HTTP.request("POST", "https://api.anthropic.com/v1/messages", {
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+  const xhr = await new Promise<XMLHttpRequest>((resolve, reject) => {
+    const req = new XMLHttpRequest();
+    req.open("POST", "https://api.anthropic.com/v1/messages");
+    req.setRequestHeader("x-api-key", apiKey);
+    req.setRequestHeader("anthropic-version", "2023-06-01");
+    req.setRequestHeader("Content-Type", "application/json");
+    req.timeout = 60_000;
+    req.onload = () => resolve(req);
+    req.onerror = () => reject(new Error("Network error"));
+    req.ontimeout = () => reject(new Error("Request timed out"));
+    req.send(
+      JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 512,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),
-      successCodes: false,
-      timeout: 60_000,
-    });
-  } catch (e) {
-    ztoolkit.log(`[SemanticTagger] Network error calling Claude API: ${e}`);
+    );
+  }).catch((e: Error) => {
+    ztoolkit.log(`[SemanticTagger] Network error calling Claude API: ${e.message}`);
     new ztoolkit.ProgressWindow(addon.data.config.addonName)
-      .createLine({ text: "Network error — could not reach Claude API", type: "fail" })
+      .createLine({ text: `Network error — could not reach Claude API: ${e.message}`, type: "fail" })
       .show()
-      .startCloseTimer(6000);
-    return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
-  }
+      .startCloseTimer(8000);
+    return null;
+  });
+
+  if (!xhr) return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
 
   if (xhr.status !== 200) {
-    ztoolkit.log(`[SemanticTagger] Claude API error ${xhr.status}: ${xhr.responseText}`);
+    // Parse Anthropic's error message for a clearer notification
+    let apiMessage = `HTTP ${xhr.status}`;
+    try {
+      const errBody = JSON.parse(xhr.responseText ?? "{}") as { error?: { message?: string } };
+      if (errBody?.error?.message) apiMessage += `: ${errBody.error.message}`;
+    } catch { /* use raw status only */ }
+    ztoolkit.log(`[SemanticTagger] Claude API error — ${apiMessage}\nKey length: ${apiKey.length}`);
     new ztoolkit.ProgressWindow(addon.data.config.addonName)
-      .createLine({ text: `Claude API error ${xhr.status} — check your API key`, type: "fail" })
+      .createLine({ text: `Claude API error — ${apiMessage}`, type: "fail" })
       .show()
-      .startCloseTimer(6000);
+      .startCloseTimer(10000);
     return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
   }
 
