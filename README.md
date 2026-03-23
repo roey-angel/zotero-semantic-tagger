@@ -32,7 +32,7 @@ When a paper is added to your library, the plugin reads its title, abstract, and
 |---|---|
 | Automatically tag new items | Enable/disable the watcher that fires on import |
 | Claude API Key | Your Anthropic API key |
-| Strictness | 0 = tag if the concept is mentioned; 100 = only tag if it's a primary focus |
+| Strictness | Controls tag count and selectivity: lax (0) = 6–12 broad tags; strict (100) = 2–4 primary-focus tags only |
 | Synonym file | Path to a `.txt` file defining synonym groups (see below) |
 | Python executable | Override if `python3` is not on your PATH |
 | extract_pdf.py path (optional override) | Use a custom extraction script instead of the bundled one |
@@ -78,8 +78,8 @@ provided library that best describe a given paper.
 
 RULES:
 1. You may ONLY use tags from the provided library — never invent new tags.
-2. Select between 3 and 10 tags. Fewer is better if the paper is narrow.
-3. [strictness instruction — varies with the strictness slider]
+2. Select between N and M tags (range set by the strictness slider).
+3. [strictness instruction — varies with the strictness slider; see table below]
 4. Ignore the references/bibliography section of the paper — do not use
    cited works to infer tags.
 5. Return ONLY a JSON array of tag strings, exactly as they appear in the
@@ -114,10 +114,13 @@ PDF text (excerpt):
 
 ---
 
-The strictness instruction is one of:
-- **Lax (0–33):** "Be inclusive: apply a tag if the paper meaningfully mentions or engages with the concept."
-- **Moderate (34–66):** "Be moderate: apply a tag if the paper substantially discusses the concept, even if it's not the primary focus."
-- **Strict (67–100):** "Be conservative: only apply a tag if the paper's main topic clearly and directly relates to it."
+The strictness setting controls both the number of tags and how liberally they are applied:
+
+| Setting | Tag count | Rule |
+|---|---|---|
+| **Lax (0–33)** | 6–12 | Apply a tag if the paper meaningfully mentions, uses, or engages with the concept — even in passing, as background, or in the methods section |
+| **Moderate (34–66)** | 4–7 | Apply a tag if the paper substantially discusses or relies on the concept, even if it is not the primary focus |
+| **Strict (67–100)** | 2–4 | Only apply a tag if it describes a central research topic — something the paper directly investigates, develops, or makes a primary contribution to |
 
 ### Safety filter
 
