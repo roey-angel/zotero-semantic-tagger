@@ -21,6 +21,7 @@ export async function resolvePythonScript(customScriptPath: string): Promise<str
     ) as string;
     await IOUtils.writeUTF8(destPath, scriptContent);
     _cachedScriptPath = destPath;
+    ztoolkit.log(`[SemanticTagger] Bundled Python script extracted to: ${destPath}`);
     return destPath;
   } catch (e) {
     ztoolkit.log(`[SemanticTagger] Failed to extract bundled Python script: ${e}`);
@@ -58,22 +59,26 @@ export async function extractPdfText(
     `zst-pdf-${Date.now()}.txt`,
   );
 
+  ztoolkit.log(`[SemanticTagger] PDF extraction: python="${pythonPath}" script="${scriptPath}" pdf="${pdfPath}" tmp="${tmpPath}"`);
+
   try {
-    const result = await Zotero.Utilities.Internal.exec(pythonPath, [
+    const exitValue = await Zotero.Utilities.Internal.exec(pythonPath, [
       scriptPath,
       pdfPath,
       tmpPath,
     ]);
 
-    if (result instanceof Error) {
-      ztoolkit.log(`[SemanticTagger] PDF extraction error: ${result.message}`);
-      return { text: null, warning: PDF_WARN };
-    }
+    ztoolkit.log(`[SemanticTagger] PDF extraction exec returned: ${JSON.stringify(exitValue)}`);
 
-    const text = await IOUtils.readUTF8(tmpPath).catch(() => null);
+    const text = await IOUtils.readUTF8(tmpPath).catch((e) => {
+      ztoolkit.log(`[SemanticTagger] PDF extraction: failed to read tmpPath: ${e}`);
+      return null;
+    });
     if (!text?.trim()) {
+      ztoolkit.log(`[SemanticTagger] PDF extraction: tmpPath empty or missing`);
       return { text: null, warning: PDF_WARN };
     }
+    ztoolkit.log(`[SemanticTagger] PDF extraction: success, ${text.length} chars`);
     return { text: text.trim(), warning: null };
   } catch (e) {
     ztoolkit.log(`[SemanticTagger] PDF extraction exception: ${e}`);

@@ -40,6 +40,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     tag: "menuitem",
     id: "semantic-tagger-tag-selected",
     label: getString("menuitem-tag-selected"),
+    icon: `${rootURI}content/icons/favicon@0.5x.png`,
     commandListener: (_ev) => {
       addon.hooks.onMenuTagSelected();
     },

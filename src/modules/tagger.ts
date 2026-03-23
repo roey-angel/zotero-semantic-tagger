@@ -150,12 +150,12 @@ interface ClaudeTagResult {
 async function queryClaudeForTags(query: ClaudeTagQuery): Promise<ClaudeTagResult> {
   const { apiKey, title, abstract, pdfText, libraryTags, synonymGroups, strictness } = query;
 
-  const strictnessInstruction =
+  const [tagMin, tagMax, strictnessInstruction] =
     strictness > 66
-      ? "Be conservative: only apply a tag if the paper's main topic clearly and directly relates to it."
+      ? [2, 4, "Be very strict: select AT MOST 4 tags (ideally 2–3). Only apply a tag if it describes a central research topic of the paper — something the paper directly investigates, develops, or makes a primary contribution to. If unsure, leave it out."]
       : strictness > 33
-      ? "Be moderate: apply a tag if the paper substantially discusses the concept, even if it's not the primary focus."
-      : "Be inclusive: apply a tag if the paper meaningfully mentions or engages with the concept.";
+      ? [4, 7, "Be moderate: select 4–7 tags. Apply a tag if the paper substantially discusses or relies on the concept, even if it is not the primary focus."]
+      : [6, 12, "Be broad: select 6–12 tags. Apply a tag if the paper meaningfully mentions, uses, or engages with the concept — even in passing, as background, or in the methods section."];
 
   const synonymSection =
     synonymGroups.length > 0
@@ -173,7 +173,7 @@ async function queryClaudeForTags(query: ClaudeTagQuery): Promise<ClaudeTagResul
 
 RULES:
 1. You may ONLY use tags from the provided library — never invent new tags.
-2. Select between 3 and 10 tags. Fewer is better if the paper is narrow.
+2. Select between ${tagMin} and ${tagMax} tags. Stay within this range — it is set by the user's strictness preference.
 3. ${strictnessInstruction}
 4. Ignore the references/bibliography section of the paper — do not use cited works to infer tags.
 5. Return ONLY a JSON array of tag strings, exactly as they appear in the library. No explanation.${synonymSection}`;
