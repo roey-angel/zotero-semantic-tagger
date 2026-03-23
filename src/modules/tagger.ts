@@ -42,7 +42,7 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
 
   const strictness = (Zotero.Prefs.get(`${PREFS}.strictness`, true) as number) ?? 50;
   const synonymFilePath = Zotero.Prefs.get(`${PREFS}.synonymFile`, true) as string;
-  const pythonPath = (Zotero.Prefs.get(`${PREFS}.pythonPath`, true) as string) || "/usr/bin/python3";
+  const pythonPath = (Zotero.Prefs.get(`${PREFS}.pythonPath`, true) as string) || "python3";
   const scriptPath = (Zotero.Prefs.get(`${PREFS}.scriptPath`, true) as string) || "";
 
   const title = item.getField("title") as string;
