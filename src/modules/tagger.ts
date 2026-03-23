@@ -58,9 +58,9 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
       pdfText = result.text;
       if (result.warning) {
         new ztoolkit.ProgressWindow(addon.data.config.addonName)
-          .createLine({ text: result.warning, type: "fail" })
+          .createLine({ text: result.warning, type: "default" })
           .show()
-          .startCloseTimer(6000);
+          .startCloseTimer(8000);
       }
     }
   }

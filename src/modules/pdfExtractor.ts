@@ -34,7 +34,7 @@ export interface PdfExtractionResult {
 }
 
 const PDF_WARN =
-  "PDF extraction failed — make sure Python and PyMuPDF are installed (pip install PyMuPDF)";
+  "PDF found but Python/PyMuPDF not available — tagged from title + abstract only (pip install PyMuPDF to enable PDF analysis)";
 
 /**
  * Extracts raw text from a PDF file by invoking the Python helper script.
