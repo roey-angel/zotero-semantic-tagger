@@ -1,5 +1,36 @@
 let _cachedScriptPath: string | null = null;
 
+export interface PdfExtractionResult {
+  text: string | null;
+  warning: string | null;
+}
+
+/**
+ * Tries to get PDF text from Zotero's own full-text search cache
+ * (.zotero-ft-cache), which Zotero creates automatically when indexing.
+ * This requires no Python and works on all platforms.
+ */
+export async function getPdfTextFromZoteroCache(
+  item: Zotero.Item,
+): Promise<string | null> {
+  const attachmentIDs = item.getAttachments();
+  for (const id of attachmentIDs) {
+    const attachment = Zotero.Items.get(id);
+    if (attachment?.attachmentContentType !== "application/pdf") continue;
+
+    const pdfPath = await attachment.getFilePathAsync();
+    if (!pdfPath) continue;
+
+    const cachePath = PathUtils.join(PathUtils.parent(pdfPath) ?? "", ".zotero-ft-cache");
+    const text = await IOUtils.readUTF8(cachePath).catch(() => null);
+    if (text?.trim()) {
+      ztoolkit.log(`[SemanticTagger] PDF text from Zotero cache: ${text.length} chars`);
+      return text.trim();
+    }
+  }
+  return null;
+}
+
 /**
  * Returns the path to extract_pdf.py to use for PDF extraction.
  *
@@ -29,25 +60,12 @@ export async function resolvePythonScript(customScriptPath: string): Promise<str
   }
 }
 
-export interface PdfExtractionResult {
-  text: string | null;
-  warning: string | null;
-}
-
 const PDF_WARN =
-  "PDF found but Python/PyMuPDF not available — tagged from title + abstract only (pip install PyMuPDF to enable PDF analysis)";
+  "PDF found but could not extract text (Python/PyMuPDF not available) — tagged from title + abstract only";
 
 /**
  * Extracts raw text from a PDF file by invoking the Python helper script.
- *
- * The plugin passes a temp file path to the Python script as the second
- * argument. The script writes extracted text there; the plugin reads it back.
- *
- * Requires:
- *   - Python 3 installed and accessible at the configured path
- *   - PyMuPDF installed: pip install PyMuPDF
- *
- * Returns { text, warning }. Warning is non-null when extraction failed.
+ * Falls back gracefully if Python or PyMuPDF is unavailable.
  */
 export async function extractPdfText(
   pdfPath: string,
@@ -59,7 +77,7 @@ export async function extractPdfText(
     `zst-pdf-${Date.now()}.txt`,
   );
 
-  ztoolkit.log(`[SemanticTagger] PDF extraction: python="${pythonPath}" script="${scriptPath}" pdf="${pdfPath}" tmp="${tmpPath}"`);
+  ztoolkit.log(`[SemanticTagger] PDF extraction (Python): python="${pythonPath}" script="${scriptPath}" pdf="${pdfPath}"`);
 
   try {
     const exitValue = await Zotero.Utilities.Internal.exec(pythonPath, [
@@ -78,7 +96,7 @@ export async function extractPdfText(
       ztoolkit.log(`[SemanticTagger] PDF extraction: tmpPath empty or missing`);
       return { text: null, warning: PDF_WARN };
     }
-    ztoolkit.log(`[SemanticTagger] PDF extraction: success, ${text.length} chars`);
+    ztoolkit.log(`[SemanticTagger] PDF extraction success: ${text.length} chars`);
     return { text: text.trim(), warning: null };
   } catch (e) {
     ztoolkit.log(`[SemanticTagger] PDF extraction exception: ${e}`);

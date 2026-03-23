@@ -1,5 +1,5 @@
 import { config } from "../../package.json";
-import { extractPdfText, getPdfPath, resolvePythonScript } from "./pdfExtractor";
+import { extractPdfText, getPdfPath, getPdfTextFromZoteroCache, resolvePythonScript } from "./pdfExtractor";
 import { loadSynonyms } from "./synonyms";
 
 const TOKEN_WARN_THRESHOLD = 20_000;
@@ -48,19 +48,25 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
   const title = item.getField("title") as string;
   const abstract = item.getField("abstractNote") as string;
 
-  // Collect PDF text using bundled script (or user-configured override)
+  // Collect PDF text: try Zotero's own full-text cache first (no Python needed),
+  // then fall back to the Python/PyMuPDF helper.
   let pdfText: string | null = null;
-  const resolvedScriptPath = await resolvePythonScript(scriptPath);
-  if (resolvedScriptPath) {
-    const pdfPath = await getPdfPath(item);
-    if (pdfPath) {
-      const result = await extractPdfText(pdfPath, pythonPath, resolvedScriptPath);
-      pdfText = result.text;
-      if (result.warning) {
-        new ztoolkit.ProgressWindow(addon.data.config.addonName)
-          .createLine({ text: result.warning, type: "default" })
-          .show()
-          .startCloseTimer(8000);
+
+  pdfText = await getPdfTextFromZoteroCache(item);
+
+  if (!pdfText) {
+    const resolvedScriptPath = await resolvePythonScript(scriptPath);
+    if (resolvedScriptPath) {
+      const pdfPath = await getPdfPath(item);
+      if (pdfPath) {
+        const result = await extractPdfText(pdfPath, pythonPath, resolvedScriptPath);
+        pdfText = result.text;
+        if (result.warning) {
+          new ztoolkit.ProgressWindow(addon.data.config.addonName)
+            .createLine({ text: result.warning, type: "default" })
+            .show()
+            .startCloseTimer(8000);
+        }
       }
     }
   }
