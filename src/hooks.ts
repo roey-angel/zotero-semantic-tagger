@@ -112,12 +112,12 @@ async function onMenuTagSelected() {
     });
   }
 
-  progressWin.changeLine({
-    progress: 100,
-    text: getString("notice-tagging-done"),
-    type: "success",
-  });
-  progressWin.startCloseTimer(4000);
+  // Close the progress bar and show a fresh dismissible success notification.
+  progressWin.startCloseTimer(1);
+  new ztoolkit.ProgressWindow(addon.data.config.addonName)
+    .createLine({ text: getString("notice-tagging-done"), type: "success" })
+    .show()
+    .startCloseTimer(4000);
 }
 
 function onShortcuts(_type: string) {
