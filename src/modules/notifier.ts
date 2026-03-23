@@ -27,14 +27,17 @@ export function registerNotifier() {
 
         const win = Zotero.getMainWindow();
 
+        // Two-pass processing: timers must be registered for all regular items
+        // before PDF attachments try to cancel them, because Zotero may send
+        // [attachment, parent] in a single batch (attachment first).
+        const pdfAttachments: Zotero.Item[] = [];
+
+        // Pass 1: schedule timers for regular items.
         for (const id of ids) {
           const item = Zotero.Items.get(id as number);
           if (!item) continue;
 
           if (item.isRegularItem()) {
-            // Schedule a delayed tag to allow Find Full Text to run first.
-            // If a PDF attachment arrives before the timer fires, the timer
-            // will be cancelled and tagging will happen immediately with the PDF.
             const itemId = id as number;
             const timer = (win ?? globalThis).setTimeout(async () => {
               _pendingTags.delete(itemId);
@@ -52,24 +55,27 @@ export function registerNotifier() {
             item.attachmentContentType === "application/pdf" &&
             item.parentItemID
           ) {
-            // PDF attached to an existing item (Find Full Text, manual attach, etc.).
-            // Cancel any pending delayed tag for the parent and tag immediately with PDF.
-            const parentId = item.parentItemID;
-            const pendingTimer = _pendingTags.get(parentId);
-            if (pendingTimer !== undefined) {
-              (win ?? globalThis).clearTimeout(pendingTimer);
-              _pendingTags.delete(parentId);
-            }
+            pdfAttachments.push(item);
+          }
+        }
 
-            const parent = Zotero.Items.get(parentId);
-            if (parent && parent.isRegularItem()) {
-              await Zotero.Promise.delay(1000); // let Zotero finish writing the attachment
-              await tagItem(parent).catch((e) =>
-                ztoolkit.log(
-                  `[SemanticTagger] Error tagging parent of attachment ${id}: ${e}`,
-                ),
-              );
-            }
+        // Pass 2: process PDF attachments — cancel the parent's timer and tag immediately.
+        for (const item of pdfAttachments) {
+          const parentId = item.parentItemID as number;
+          const pendingTimer = _pendingTags.get(parentId);
+          if (pendingTimer !== undefined) {
+            (win ?? globalThis).clearTimeout(pendingTimer);
+            _pendingTags.delete(parentId);
+          }
+
+          const parent = Zotero.Items.get(parentId);
+          if (parent && parent.isRegularItem()) {
+            await Zotero.Promise.delay(1000); // let Zotero finish writing the attachment
+            await tagItem(parent).catch((e) =>
+              ztoolkit.log(
+                `[SemanticTagger] Error tagging parent of attachment ${item.id}: ${e}`,
+              ),
+            );
           }
         }
       },

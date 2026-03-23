@@ -21,12 +21,18 @@ export async function getPdfTextFromZoteroCache(
     const pdfPath = await attachment.getFilePathAsync();
     if (!pdfPath) continue;
 
-    const cachePath = PathUtils.join(PathUtils.parent(pdfPath) ?? "", ".zotero-ft-cache");
-    const text = await IOUtils.readUTF8(cachePath).catch(() => null);
+    const storageDir = PathUtils.parent(pdfPath) ?? "";
+    const cachePath = PathUtils.join(storageDir, ".zotero-ft-cache");
+    ztoolkit.log(`[SemanticTagger] Checking Zotero cache: ${cachePath}`);
+    const text = await IOUtils.readUTF8(cachePath).catch((e) => {
+      ztoolkit.log(`[SemanticTagger] Cache not readable: ${e}`);
+      return null;
+    });
     if (text?.trim()) {
       ztoolkit.log(`[SemanticTagger] PDF text from Zotero cache: ${text.length} chars`);
       return text.trim();
     }
+    ztoolkit.log(`[SemanticTagger] Cache empty or missing at: ${cachePath}`);
   }
   return null;
 }
