@@ -1,10 +1,10 @@
 import { config } from "../../package.json";
-import { extractPdfText, getPdfPath, getPdfTextFromZoteroCache, resolvePythonScript } from "./pdfExtractor";
+import { extractPdfText, getPdfPath, getPdfTextFromFulltextDB, getPdfTextFromZoteroCache, resolvePythonScript } from "./pdfExtractor";
 import { loadSynonyms } from "./synonyms";
 
-const TOKEN_WARN_THRESHOLD = 20_000;
 let _sessionTokens = 0;
 let _sessionPaused = false;
+let _tokenWarningsGiven = 0; // warns at N, 2N, 3N… tokens
 
 const PREFS = config.prefsPrefix;
 
@@ -42,30 +42,42 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
 
   const strictness = (Zotero.Prefs.get(`${PREFS}.strictness`, true) as number) ?? 50;
   const synonymFilePath = Zotero.Prefs.get(`${PREFS}.synonymFile`, true) as string;
-  const pythonPath = (Zotero.Prefs.get(`${PREFS}.pythonPath`, true) as string) || "python3";
-  const scriptPath = (Zotero.Prefs.get(`${PREFS}.scriptPath`, true) as string) || "";
+  const usePdf = Zotero.Prefs.get(`${PREFS}.usePdf`, true) as boolean;
+  const pythonPath = ((Zotero.Prefs.get(`${PREFS}.pythonPath`, true) as string) || "python3").trim();
+  const scriptPath = ((Zotero.Prefs.get(`${PREFS}.scriptPath`, true) as string) || "").trim();
 
   const title = item.getField("title") as string;
   const abstract = item.getField("abstractNote") as string;
 
-  // Collect PDF text: try Zotero's own full-text cache first (no Python needed),
-  // then fall back to the Python/PyMuPDF helper.
+  // Collect PDF text unless the user has opted out.
+  // Order: Zotero fulltext DB → .zotero-ft-cache file → Python/PyMuPDF.
   let pdfText: string | null = null;
 
-  pdfText = await getPdfTextFromZoteroCache(item);
+  if (usePdf) {
+    pdfText = await getPdfTextFromFulltextDB(item);
 
-  if (!pdfText) {
-    const resolvedScriptPath = await resolvePythonScript(scriptPath);
-    if (resolvedScriptPath) {
-      const pdfPath = await getPdfPath(item);
-      if (pdfPath) {
-        const result = await extractPdfText(pdfPath, pythonPath, resolvedScriptPath);
-        pdfText = result.text;
-        if (result.warning) {
+    if (!pdfText) {
+      pdfText = await getPdfTextFromZoteroCache(item);
+    }
+
+    if (!pdfText) {
+      const resolvedScriptPath = await resolvePythonScript(scriptPath);
+      if (resolvedScriptPath) {
+        const pdfPath = await getPdfPath(item);
+        if (pdfPath) {
+          const result = await extractPdfText(pdfPath, pythonPath, resolvedScriptPath);
+          pdfText = result.text;
+          if (result.warning) {
+            new ztoolkit.ProgressWindow(addon.data.config.addonName)
+              .createLine({ text: result.warning, type: "default" })
+              .show()
+              .startCloseTimer(8000);
+          }
+        } else {
           new ztoolkit.ProgressWindow(addon.data.config.addonName)
-            .createLine({ text: result.warning, type: "default" })
+            .createLine({ text: "No PDF attached — tagging from title + abstract only", type: "default" })
             .show()
-            .startCloseTimer(8000);
+            .startCloseTimer(5000);
         }
       }
     }
@@ -102,10 +114,12 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
 
   // Session token tracking
   _sessionTokens += inputTokens + outputTokens;
-  if (_sessionTokens >= TOKEN_WARN_THRESHOLD) {
+  const tokenWarnThreshold = (Zotero.Prefs.get(`${PREFS}.tokenWarnThreshold`, true) as number) ?? 20_000;
+  if (tokenWarnThreshold > 0 && _sessionTokens >= (_tokenWarningsGiven + 1) * tokenWarnThreshold) {
+    _tokenWarningsGiven++;
     const win = Zotero.getMainWindow();
     const cont = win?.confirm(
-      `Semantic Tagger has used ${_sessionTokens.toLocaleString()} tokens this session (budget: ${TOKEN_WARN_THRESHOLD.toLocaleString()}).\n\nContinue tagging?`,
+      `Semantic Tagger has used ${_sessionTokens.toLocaleString()} tokens this session.\n\nContinue tagging? (Next warning after another ${tokenWarnThreshold.toLocaleString()} tokens)`,
     );
     if (!cont) {
       _sessionPaused = true;
@@ -173,7 +187,7 @@ async function queryClaudeForTags(query: ClaudeTagQuery): Promise<ClaudeTagResul
   const contentParts: string[] = [];
   if (title) contentParts.push(`Title: ${title}`);
   if (abstract) contentParts.push(`Abstract: ${abstract}`);
-  if (pdfText) contentParts.push(`PDF text (excerpt):\n${pdfText.slice(0, 8000)}`);
+  if (pdfText) contentParts.push(`PDF text (excerpt):\n${pdfText.slice(0, 4000)}`);
 
   const systemPrompt = `You are a scientific literature tagger. Your task is to select tags from a provided library that best describe a given paper.
 
@@ -184,13 +198,14 @@ RULES:
 4. Ignore the references/bibliography section of the paper — do not use cited works to infer tags.
 5. Return ONLY a JSON array of tag strings, exactly as they appear in the library. No explanation.${synonymSection}`;
 
-  const userMessage = `Tag library:\n${libraryTags.join("\n")}\n\n---\n\n${contentParts.join("\n\n")}`;
-
+  // The tag library is identical across all calls in a session, so mark it for
+  // prompt caching. Anthropic caches it after the first call (~90% cheaper on cache hits).
   const xhr = await new Promise<XMLHttpRequest>((resolve, reject) => {
     const req = new XMLHttpRequest();
     req.open("POST", "https://api.anthropic.com/v1/messages");
     req.setRequestHeader("x-api-key", apiKey);
     req.setRequestHeader("anthropic-version", "2023-06-01");
+    req.setRequestHeader("anthropic-beta", "prompt-caching-2024-07-31");
     req.setRequestHeader("Content-Type", "application/json");
     req.timeout = 60_000;
     req.onload = () => resolve(req);
@@ -201,7 +216,20 @@ RULES:
         model: "claude-sonnet-4-6",
         max_tokens: 512,
         system: systemPrompt,
-        messages: [{ role: "user", content: userMessage }],
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Tag library:\n${libraryTags.join("\n")}`,
+              cache_control: { type: "ephemeral" },
+            },
+            {
+              type: "text",
+              text: `---\n\n${contentParts.join("\n\n")}`,
+            },
+          ],
+        }],
       }),
     );
   }).catch((e: Error) => {
@@ -216,17 +244,24 @@ RULES:
   if (!xhr) return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
 
   if (xhr.status !== 200) {
-    // Parse Anthropic's error message for a clearer notification
     let apiMessage = `HTTP ${xhr.status}`;
+    let isOutOfCredits = false;
     try {
-      const errBody = JSON.parse(xhr.responseText ?? "{}") as { error?: { message?: string } };
+      const errBody = JSON.parse(xhr.responseText ?? "{}") as { error?: { message?: string; type?: string } };
       if (errBody?.error?.message) apiMessage += `: ${errBody.error.message}`;
+      isOutOfCredits =
+        xhr.status === 402 ||
+        (errBody?.error?.message ?? "").toLowerCase().includes("credit");
     } catch { /* use raw status only */ }
     ztoolkit.log(`[SemanticTagger] Claude API error — ${apiMessage}\nKey length: ${apiKey.length}`);
+    const text = isOutOfCredits
+      ? "Anthropic API credits exhausted — please top up at console.anthropic.com. Tagging paused."
+      : `Claude API error — ${apiMessage}`;
+    if (isOutOfCredits) _sessionPaused = true;
     new ztoolkit.ProgressWindow(addon.data.config.addonName)
-      .createLine({ text: `Claude API error — ${apiMessage}`, type: "fail" })
+      .createLine({ text, type: "fail" })
       .show()
-      .startCloseTimer(10000);
+      .startCloseTimer(isOutOfCredits ? 30000 : 10000);
     return { tags: [], inputTokens: 0, outputTokens: 0, apiError: true };
   }
 

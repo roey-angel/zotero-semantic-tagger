@@ -11,6 +11,8 @@ declare namespace _ZoteroTypes {
       "apiKey": string;
       "strictness": number;
       "synonymFile": string;
+      "tokenWarnThreshold": number;
+      "usePdf": boolean;
       "pythonPath": string;
       "scriptPath": string;
     };

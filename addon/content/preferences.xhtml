@@ -53,6 +53,27 @@
     <button id="__addonRef__-synonyms-browse" data-l10n-id="pref-browse" />
   </hbox>
 
+  <!-- Token warning threshold -->
+  <hbox align="center">
+    <html:label for="zotero-prefpane-__addonRef__-token-warn" data-l10n-id="pref-token-warn-label" />
+    <html:input
+      type="number"
+      id="zotero-prefpane-__addonRef__-token-warn"
+      preference="tokenWarnThreshold"
+      min="0"
+      step="1000"
+      style="width:80px; margin: 0 8px;"
+    />
+    <html:label data-l10n-id="pref-token-warn-hint" />
+  </hbox>
+
+  <!-- PDF toggle -->
+  <checkbox
+    id="zotero-prefpane-__addonRef__-use-pdf"
+    preference="usePdf"
+    data-l10n-id="pref-use-pdf"
+  />
+
   <!-- Python path -->
   <hbox align="center">
     <html:label for="zotero-prefpane-__addonRef__-python" data-l10n-id="pref-python-label" />
@@ -60,7 +81,7 @@
       type="text"
       id="zotero-prefpane-__addonRef__-python"
       preference="pythonPath"
-      placeholder="python3 or full path e.g. /home/user/miniforge3/bin/python3"
+      placeholder="python3  (or full path, e.g. /usr/local/bin/python3 or C:\Python313\python.exe)"
       style="flex:1; margin: 0 8px;"
     />
   </hbox>

@@ -19,6 +19,9 @@
     "url": "https://github.com/roey-angel/zotero-semantic-tagger/issues"
   },
   "homepage": "https://github.com/roey-angel/zotero-semantic-tagger",
+  "engines": {
+    "node": ">=20.12.0"
+  },
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",
@@ -42,7 +45,7 @@
     "mocha": "^11.7.5",
     "prettier": "^3.7.4",
     "typescript": "^5.9.3",
-    "zotero-plugin-scaffold": "^0.8.2",
+    "zotero-plugin-scaffold": "^0.3.0",
     "zotero-types": "^4.1.0-beta.4"
   },
   "prettier": {

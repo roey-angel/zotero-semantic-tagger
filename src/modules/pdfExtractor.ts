@@ -6,9 +6,75 @@ export interface PdfExtractionResult {
 }
 
 /**
+ * Tries to get PDF text from Zotero's fulltext search database (fulltext.sqlite).
+ * Zotero stores indexed PDF content in its own database, independently of where
+ * the PDF file is stored — so this works with ZotMoov and other file-moving tools.
+ *
+ * Tries several API variants because the exact surface differs across Zotero builds.
+ */
+export async function getPdfTextFromFulltextDB(
+  item: Zotero.Item,
+): Promise<string | null> {
+  const attachmentIDs = item.getAttachments();
+  for (const id of attachmentIDs) {
+    const attachment = Zotero.Items.get(id);
+    if (attachment?.attachmentContentType !== "application/pdf") continue;
+
+    const ft = Zotero.Fulltext as any;
+
+    // Variant A: private _fulltextDB connection (Zotero 7 internal name)
+    for (const prop of ["_fulltextDB", "_db", "db"]) {
+      try {
+        const db = ft[prop];
+        if (!db) continue;
+        const content = await db.valueQueryAsync(
+          "SELECT content FROM content WHERE itemID=?", [id],
+        ) as string | null | undefined;
+        if (content?.trim()) {
+          ztoolkit.log(`[SemanticTagger] PDF text from Fulltext.${prop}: ${content.length} chars`);
+          return content.trim();
+        }
+      } catch (e) {
+        ztoolkit.log(`[SemanticTagger] Fulltext.${prop} query error: ${e}`);
+      }
+    }
+
+    // Variant B: fulltext.sqlite is attached to Zotero's main DB as schema "fulltext"
+    try {
+      const content = await Zotero.DB.valueQueryAsync(
+        "SELECT content FROM fulltext.content WHERE itemID=?", [id],
+      ) as string | null | undefined;
+      if (content?.trim()) {
+        ztoolkit.log(`[SemanticTagger] PDF text from Zotero.DB attached fulltext: ${content.length} chars`);
+        return content.trim();
+      }
+    } catch (_e) {
+      // not attached — silently skip
+    }
+
+    // Variant C: .zotero-ft-cache in Zotero's storage dir for this attachment key
+    try {
+      const key = attachment?.key;
+      if (key) {
+        const cachePath = PathUtils.join(Zotero.DataDirectory.dir, "storage", key, ".zotero-ft-cache");
+        const text = await IOUtils.readUTF8(cachePath).catch(() => null);
+        if (text?.trim()) {
+          ztoolkit.log(`[SemanticTagger] PDF text from storage cache (key ${key}): ${text.length} chars`);
+          return text.trim();
+        }
+      }
+    } catch (_e) {
+      // silently continue
+    }
+  }
+  return null;
+}
+
+/**
  * Tries to get PDF text from Zotero's own full-text search cache
  * (.zotero-ft-cache), which Zotero creates automatically when indexing.
- * This requires no Python and works on all platforms.
+ * This requires no Python and works on all platforms, but only for items
+ * stored in Zotero's default storage directory (not with ZotMoov).
  */
 export async function getPdfTextFromZoteroCache(
   item: Zotero.Item,
@@ -23,16 +89,11 @@ export async function getPdfTextFromZoteroCache(
 
     const storageDir = PathUtils.parent(pdfPath) ?? "";
     const cachePath = PathUtils.join(storageDir, ".zotero-ft-cache");
-    ztoolkit.log(`[SemanticTagger] Checking Zotero cache: ${cachePath}`);
-    const text = await IOUtils.readUTF8(cachePath).catch((e) => {
-      ztoolkit.log(`[SemanticTagger] Cache not readable: ${e}`);
-      return null;
-    });
+    const text = await IOUtils.readUTF8(cachePath).catch(() => null);
     if (text?.trim()) {
-      ztoolkit.log(`[SemanticTagger] PDF text from Zotero cache: ${text.length} chars`);
+      ztoolkit.log(`[SemanticTagger] PDF text from .zotero-ft-cache: ${text.length} chars`);
       return text.trim();
     }
-    ztoolkit.log(`[SemanticTagger] Cache empty or missing at: ${cachePath}`);
   }
   return null;
 }
@@ -46,16 +107,23 @@ export async function getPdfTextFromZoteroCache(
  */
 export async function resolvePythonScript(customScriptPath: string): Promise<string> {
   if (customScriptPath) return customScriptPath;
-  if (_cachedScriptPath) return _cachedScriptPath;
+  if (_cachedScriptPath) {
+    // Re-extract if previously cached file was corrupted (bug: getContentsAsync returned XHR object)
+    const head = await IOUtils.readUTF8(_cachedScriptPath).catch(() => "").then(t => t.slice(0, 20));
+    if (!head.startsWith("[object")) return _cachedScriptPath;
+    _cachedScriptPath = null; // force re-extraction
+  }
 
   const destDir = PathUtils.join(Zotero.DataDirectory.dir, "semantic-tagger");
   const destPath = PathUtils.join(destDir, "extract_pdf.py");
 
   try {
     await IOUtils.makeDirectory(destDir, { ignoreExisting: true });
-    const scriptContent = await Zotero.File.getContentsAsync(
-      rootURI + "content/extract_pdf.py",
-    ) as string;
+    // Use fetch() — Zotero.File.getContentsAsync resolves with [object XMLHttpRequest]
+    // when loading moz-extension:// resources, which corrupts the written file.
+    const resp = await fetch(rootURI + "content/extract_pdf.py");
+    if (!resp.ok) throw new Error(`fetch failed: ${resp.status}`);
+    const scriptContent = await resp.text();
     await IOUtils.writeUTF8(destPath, scriptContent);
     _cachedScriptPath = destPath;
     ztoolkit.log(`[SemanticTagger] Bundled Python script extracted to: ${destPath}`);
@@ -86,11 +154,17 @@ export async function extractPdfText(
   ztoolkit.log(`[SemanticTagger] PDF extraction (Python): python="${pythonPath}" script="${scriptPath}" pdf="${pdfPath}"`);
 
   try {
-    const exitValue = await Zotero.Utilities.Internal.exec(pythonPath, [
-      scriptPath,
-      pdfPath,
-      tmpPath,
-    ]);
+    // Run via bash so that Python environments that need LD_LIBRARY_PATH
+    // (e.g. conda/miniforge, some virtualenv setups) can find their shared
+    // libraries. When Zotero spawns a process directly, these env vars are not
+    // inherited. The inline assignment prepends <prefix>/lib when pythonPath
+    // is inside a standard bin/ directory. On Windows this exec throws (no
+    // /bin/bash), which is caught below and returns PDF_WARN gracefully; the
+    // Zotero fulltext DB and cache-file approaches still work on Windows.
+    const condaLibPath = pythonPath.replace(/\/bin\/python[0-9.]*$/, "/lib");
+    const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+    const shellCmd = `LD_LIBRARY_PATH=${q(condaLibPath)}:"$LD_LIBRARY_PATH" ${q(pythonPath)} ${q(scriptPath)} ${q(pdfPath)} ${q(tmpPath)}`;
+    const exitValue = await Zotero.Utilities.Internal.exec("/bin/bash", ["-c", shellCmd]);
 
     ztoolkit.log(`[SemanticTagger] PDF extraction exec returned: ${JSON.stringify(exitValue)}`);
 

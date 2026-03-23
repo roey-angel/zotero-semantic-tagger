@@ -12,6 +12,11 @@ let notifierID: string | null = null;
 // If no PDF arrives, the timer fires and we tag with title + abstract only.
 const _pendingTags = new Map<number, number>();
 
+// Parent IDs that have already been tagged via the PDF-attachment path.
+// Prevents a duplicate tag run when the PDF attachment notification arrives
+// before the parent item notification (so no timer was set yet to cancel).
+const _recentlyTagged = new Set<number>();
+
 export function registerNotifier() {
   notifierID = Zotero.Notifier.registerObserver(
     {
@@ -39,6 +44,12 @@ export function registerNotifier() {
 
           if (item.isRegularItem()) {
             const itemId = id as number;
+            // Skip if this parent was already tagged by an earlier PDF-attachment
+            // notification (can happen when attachment arrives before parent).
+            if (_recentlyTagged.has(itemId)) {
+              _recentlyTagged.delete(itemId);
+              continue;
+            }
             const timer = (win ?? globalThis).setTimeout(async () => {
               _pendingTags.delete(itemId);
               const latestItem = Zotero.Items.get(itemId);
@@ -66,6 +77,14 @@ export function registerNotifier() {
           if (pendingTimer !== undefined) {
             (win ?? globalThis).clearTimeout(pendingTimer);
             _pendingTags.delete(parentId);
+          } else {
+            // No timer yet — the parent item notification may arrive later.
+            // Mark it so we don't schedule a timer when the parent notification fires.
+            _recentlyTagged.add(parentId);
+            (win ?? globalThis).setTimeout(
+              () => _recentlyTagged.delete(parentId),
+              FIND_FULL_TEXT_WAIT_MS * 2,
+            );
           }
 
           const parent = Zotero.Items.get(parentId);
@@ -96,4 +115,5 @@ export function unregisterNotifier() {
     (win ?? globalThis).clearTimeout(timer);
   }
   _pendingTags.clear();
+  _recentlyTagged.clear();
 }

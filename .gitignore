@@ -20,3 +20,6 @@ tsconfig.tsbuildinfo
 .scaffold
 build
 logs
+
+# Personal debug exports from Zotero
+Debug Output*
