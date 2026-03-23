@@ -2,6 +2,11 @@
 .DS_Store
 .claude
 
+# Project docs (not for distribution)
+CLAUDE.md
+project_description.md
+SemanticTagger.png
+
 # Node.js
 node_modules
 pnpm-lock.yaml
