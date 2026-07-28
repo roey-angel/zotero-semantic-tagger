@@ -2,6 +2,7 @@ pref-title = Semantic Tagger
 pref-watcher-enabled =
     .label = Automatically tag new items when added to library
 pref-apikey-label = Claude API Key:
+pref-model-label = Model:
 pref-strictness-label = Strictness:
 pref-strictness-lax = Lax
 pref-strictness-strict = Strict

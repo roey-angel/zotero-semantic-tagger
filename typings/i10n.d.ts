@@ -11,6 +11,7 @@ export type FluentMessageId =
   | 'pref-apikey-label'
   | 'pref-browse'
   | 'pref-help'
+  | 'pref-model-label'
   | 'pref-python-label'
   | 'pref-script-label'
   | 'pref-strictness-label'

@@ -10,6 +10,80 @@ const REF = config.addonRef;
 export async function registerPrefsScripts(_window: Window) {
   loadPrefs(_window);
   bindPrefEvents(_window);
+  void loadModels(_window);
+}
+
+/**
+ * Populates the model dropdown. If an API key is set, the list is fetched
+ * from the Models API (exactly the models the key can access); otherwise a
+ * small static fallback is shown. The currently selected model is always
+ * kept in the list.
+ */
+async function loadModels(win: Window) {
+  const doc = win.document;
+  const sel = doc.getElementById(
+    `zotero-prefpane-${REF}-model`,
+  ) as HTMLSelectElement | null;
+  if (!sel) return;
+
+  const current =
+    ((Zotero.Prefs.get(`${PREFS}.model`, true) as string) || "").trim() ||
+    "claude-sonnet-5";
+  const apiKey = (
+    (Zotero.Prefs.get(`${PREFS}.apiKey`, true) as string) || ""
+  ).trim();
+
+  // Fallback when there is no key yet or the Models API is unreachable
+  let models: { id: string; label: string }[] = [
+    { id: "claude-sonnet-5", label: "Claude Sonnet 5 (recommended)" },
+    { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 (cheapest)" },
+    { id: "claude-opus-5", label: "Claude Opus 5" },
+  ];
+
+  if (apiKey) {
+    try {
+      const resp = await fetch(
+        "https://api.anthropic.com/v1/models?limit=100",
+        {
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+        },
+      );
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          data?: { id: string; display_name?: string }[];
+        };
+        if (data.data?.length) {
+          models = data.data.map((m) => ({
+            id: m.id,
+            label: m.display_name ? `${m.display_name} (${m.id})` : m.id,
+          }));
+        }
+      } else {
+        ztoolkit.log(`[SemanticTagger] Models API HTTP ${resp.status}`);
+      }
+    } catch (e) {
+      ztoolkit.log(`[SemanticTagger] Models API unreachable: ${e}`);
+    }
+  }
+
+  if (!models.some((m) => m.id === current)) {
+    models.unshift({ id: current, label: current });
+  }
+
+  sel.textContent = "";
+  for (const m of models) {
+    const opt = doc.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "option",
+    ) as HTMLOptionElement;
+    opt.value = m.id;
+    opt.textContent = m.label;
+    sel.appendChild(opt);
+  }
+  sel.value = current;
 }
 
 function loadPrefs(win: Window) {
@@ -72,7 +146,7 @@ async function pickFile(win: Window, title: string): Promise<string | null> {
 function bindPrefEvents(win: Window) {
   const doc = win.document;
 
-  // API key
+  // API key — a new key may unlock different models, so refresh the dropdown
   doc
     .getElementById(`zotero-prefpane-${REF}-apikey`)
     ?.addEventListener("change", (e: Event) => {
@@ -81,6 +155,15 @@ function bindPrefEvents(win: Window) {
         (e.target as HTMLInputElement).value,
         true,
       );
+      void loadModels(win);
+    });
+
+  // Model dropdown
+  doc
+    .getElementById(`zotero-prefpane-${REF}-model`)
+    ?.addEventListener("change", (e: Event) => {
+      const v = (e.target as HTMLSelectElement).value;
+      if (v) Zotero.Prefs.set(`${PREFS}.model`, v, true);
     });
 
   // Strictness slider

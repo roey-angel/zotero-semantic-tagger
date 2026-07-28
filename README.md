@@ -28,16 +28,17 @@ When a paper is added to your library, the plugin reads its title, abstract, and
 
 ## Configuration
 
-| Setting                                 | Description                                                                                                                                                     |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Automatically tag new items             | Enable/disable the watcher that fires on import                                                                                                                 |
-| Claude API Key                          | Your Anthropic API key                                                                                                                                          |
-| Strictness                              | Controls tag count and selectivity: lax (0) = 6–12 broad tags; strict (100) = 2–4 primary-focus tags only                                                       |
-| Synonym file                            | Path to a `.txt` file defining synonym groups (see below)                                                                                                       |
-| Warn after every N tokens               | Show a dialog when cumulative session token usage crosses a multiple of N (0 = never warn)                                                                      |
-| Use PDF text                            | Also extract and send PDF text to Claude (uses more tokens; disabled by default)                                                                                |
-| Python executable                       | Full path to the Python interpreter, or just `python3` if it is on your PATH. Only needed if "Use PDF text" is enabled and Zotero has not indexed the file yet. |
-| extract_pdf.py path (optional override) | Use a custom extraction script instead of the bundled one                                                                                                       |
+| Setting                                 | Description                                                                                                                                                                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Automatically tag new items             | Enable/disable the watcher that fires on import                                                                                                                                                                                                              |
+| Claude API Key                          | Your Anthropic API key                                                                                                                                                                                                                                       |
+| Model                                   | Which Claude model to use. Once an API key is entered, the dropdown lists exactly the models your key can access (fetched live from the Models API); without a key a small default list is shown. Default: `claude-sonnet-5`; `claude-haiku-4-5` is cheaper. |
+| Strictness                              | Controls tag count and selectivity: lax (0) = 6–12 broad tags; strict (100) = 2–4 primary-focus tags only                                                                                                                                                    |
+| Synonym file                            | Path to a `.txt` file defining synonym groups (see below)                                                                                                                                                                                                    |
+| Warn after every N tokens               | Show a dialog when cumulative session token usage crosses a multiple of N (0 = never warn)                                                                                                                                                                   |
+| Use PDF text                            | Also extract and send PDF text to Claude (uses more tokens; disabled by default)                                                                                                                                                                             |
+| Python executable                       | Full path to the Python interpreter, or just `python3` if it is on your PATH. Only needed if "Use PDF text" is enabled and Zotero has not indexed the file yet.                                                                                              |
+| extract_pdf.py path (optional override) | Use a custom extraction script instead of the bundled one                                                                                                                                                                                                    |
 
 ## Synonym file format
 
@@ -77,7 +78,7 @@ If none of the methods succeed, the item is still tagged — from title and abst
 
 ### Claude API call
 
-A single call is made to `claude-sonnet-5` (configurable via the hidden preference `extensions.zotero.semantictagger.model` in Zotero's Config Editor). The prompt is:
+A single call is made to the selected model (default `claude-sonnet-5`). The prompt is:
 
 ---
 
