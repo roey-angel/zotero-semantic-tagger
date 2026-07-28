@@ -112,30 +112,40 @@ export function registerNotifier() {
 }
 
 /**
- * Waits until one of the parent's PDF attachments exists on disk, then a
- * short settle delay (a cross-filesystem move may still be flushing).
+ * Waits until one of the parent's PDF attachments is present on disk at a
+ * path that stops changing. File-moving tools (ZotMoov, ZotFile) relocate
+ * the PDF out of Zotero storage moments after import and rewrite the
+ * attachment as a linked file; extracting during that window opens a path
+ * that is deleted mid-read. Requiring the same path twice, 2s apart, means
+ * the move has finished.
+ *
  * Gives up after timeoutMs and lets tagging proceed with title + abstract.
  */
 // ponytail: 2s polling; switch to an attachment-modify observer if this proves flaky
 async function waitForPdfFile(parent: Zotero.Item, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
+  let lastPath: string | null = null;
   for (;;) {
+    let seen: string | null = null;
     for (const id of parent.getAttachments()) {
       const att = Zotero.Items.get(id);
       if (att?.attachmentContentType !== "application/pdf") continue;
       try {
         const p = await att.getFilePathAsync();
         if (p && (await IOUtils.exists(p))) {
-          await Zotero.Promise.delay(1000); // settle
-          return;
+          seen = p;
+          break;
         }
       } catch (_e) {
         // keep waiting
       }
     }
+    if (seen && seen === lastPath) return; // path stable — move finished
+    lastPath = seen;
+
     if (Date.now() >= deadline) {
       ztoolkit.log(
-        `[SemanticTagger] PDF file for item ${parent.id} not on disk after ${timeoutMs / 1000}s — tagging without PDF text`,
+        `[SemanticTagger] PDF file for item ${parent.id} not settled after ${timeoutMs / 1000}s — tagging with whatever is available`,
       );
       return;
     }

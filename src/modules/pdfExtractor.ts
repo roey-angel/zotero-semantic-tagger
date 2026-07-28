@@ -6,108 +6,46 @@ export interface PdfExtractionResult {
 }
 
 /**
- * Tries to get PDF text from Zotero's fulltext search database (fulltext.sqlite).
- * Zotero stores indexed PDF content in its own database, independently of where
- * the PDF file is stored — so this works with ZotMoov and other file-moving tools.
+ * Tries to get PDF text from Zotero's own full-text cache (.zotero-ft-cache),
+ * which Zotero writes when it indexes an attachment. No Python needed, works
+ * on all platforms — but only once Zotero has actually indexed the file, so a
+ * freshly imported PDF usually misses here.
  *
- * Tries several API variants because the exact surface differs across Zotero builds.
- */
-export async function getPdfTextFromFulltextDB(
-  item: Zotero.Item,
-): Promise<string | null> {
-  const attachmentIDs = item.getAttachments();
-  for (const id of attachmentIDs) {
-    const attachment = Zotero.Items.get(id);
-    if (attachment?.attachmentContentType !== "application/pdf") continue;
-
-    const ft = Zotero.Fulltext as any;
-
-    // Variant A: private _fulltextDB connection (Zotero 7 internal name)
-    for (const prop of ["_fulltextDB", "_db", "db"]) {
-      try {
-        const db = ft[prop];
-        if (!db) continue;
-        const content = (await db.valueQueryAsync(
-          "SELECT content FROM content WHERE itemID=?",
-          [id],
-        )) as string | null | undefined;
-        if (content?.trim()) {
-          ztoolkit.log(
-            `[SemanticTagger] PDF text from Fulltext.${prop}: ${content.length} chars`,
-          );
-          return content.trim();
-        }
-      } catch (e) {
-        ztoolkit.log(`[SemanticTagger] Fulltext.${prop} query error: ${e}`);
-      }
-    }
-
-    // Variant B: fulltext.sqlite is attached to Zotero's main DB as schema "fulltext"
-    try {
-      const content = (await Zotero.DB.valueQueryAsync(
-        "SELECT content FROM fulltext.content WHERE itemID=?",
-        [id],
-      )) as string | null | undefined;
-      if (content?.trim()) {
-        ztoolkit.log(
-          `[SemanticTagger] PDF text from Zotero.DB attached fulltext: ${content.length} chars`,
-        );
-        return content.trim();
-      }
-    } catch (_e) {
-      // not attached — silently skip
-    }
-
-    // Variant C: .zotero-ft-cache in Zotero's storage dir for this attachment key
-    try {
-      const key = attachment?.key;
-      if (key) {
-        const cachePath = PathUtils.join(
-          Zotero.DataDirectory.dir,
-          "storage",
-          key,
-          ".zotero-ft-cache",
-        );
-        const text = await IOUtils.readUTF8(cachePath).catch(() => null);
-        if (text?.trim()) {
-          ztoolkit.log(
-            `[SemanticTagger] PDF text from storage cache (key ${key}): ${text.length} chars`,
-          );
-          return text.trim();
-        }
-      }
-    } catch (_e) {
-      // silently continue
-    }
-  }
-  return null;
-}
-
-/**
- * Tries to get PDF text from Zotero's own full-text search cache
- * (.zotero-ft-cache), which Zotero creates automatically when indexing.
- * This requires no Python and works on all platforms, but only for items
- * stored in Zotero's default storage directory (not with ZotMoov).
+ * Looks in the attachment's storage directory first (where Zotero puts it),
+ * then alongside the file itself.
  */
 export async function getPdfTextFromZoteroCache(
   item: Zotero.Item,
 ): Promise<string | null> {
-  const attachmentIDs = item.getAttachments();
-  for (const id of attachmentIDs) {
+  for (const id of item.getAttachments()) {
     const attachment = Zotero.Items.get(id);
     if (attachment?.attachmentContentType !== "application/pdf") continue;
 
-    const pdfPath = await attachment.getFilePathAsync();
-    if (!pdfPath) continue;
-
-    const storageDir = PathUtils.parent(pdfPath) ?? "";
-    const cachePath = PathUtils.join(storageDir, ".zotero-ft-cache");
-    const text = await IOUtils.readUTF8(cachePath).catch(() => null);
-    if (text?.trim()) {
-      ztoolkit.log(
-        `[SemanticTagger] PDF text from .zotero-ft-cache: ${text.length} chars`,
+    const candidates: string[] = [];
+    if (attachment.key) {
+      candidates.push(
+        PathUtils.join(
+          Zotero.DataDirectory.dir,
+          "storage",
+          attachment.key,
+          ".zotero-ft-cache",
+        ),
       );
-      return text.trim();
+    }
+    const pdfPath = await attachment.getFilePathAsync().catch(() => null);
+    if (pdfPath) {
+      const dir = PathUtils.parent(pdfPath);
+      if (dir) candidates.push(PathUtils.join(dir, ".zotero-ft-cache"));
+    }
+
+    for (const cachePath of candidates) {
+      const text = await IOUtils.readUTF8(cachePath).catch(() => null);
+      if (text?.trim()) {
+        ztoolkit.log(
+          `[SemanticTagger] PDF text from ${cachePath}: ${text.length} chars`,
+        );
+        return text.trim();
+      }
     }
   }
   return null;

@@ -2,7 +2,6 @@ import { config } from "../../package.json";
 import {
   extractPdfText,
   getPdfPath,
-  getPdfTextFromFulltextDB,
   getPdfTextFromZoteroCache,
   resolvePythonScript,
 } from "./pdfExtractor";
@@ -81,26 +80,38 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
   const abstract = item.getField("abstractNote") as string;
 
   // Collect PDF text unless the user has opted out.
-  // Order: Zotero fulltext DB → .zotero-ft-cache file → Python/PyMuPDF.
+  // Order: Zotero's .zotero-ft-cache → Python/PyMuPDF.
   let pdfText: string | null = null;
 
   if (usePdf) {
-    pdfText = await getPdfTextFromFulltextDB(item);
-
-    if (!pdfText) {
-      pdfText = await getPdfTextFromZoteroCache(item);
-    }
+    pdfText = await getPdfTextFromZoteroCache(item);
 
     if (!pdfText) {
       const resolvedScriptPath = await resolvePythonScript(scriptPath);
       if (resolvedScriptPath) {
         const pdfPath = await getPdfPath(item);
         if (pdfPath) {
-          const result = await extractPdfText(
+          let result = await extractPdfText(
             pdfPath,
             pythonPath,
             resolvedScriptPath,
           );
+          // A file-moving tool may have relocated the PDF mid-extraction
+          // (the path we opened is gone). Re-resolve and try once more.
+          if (!result.text) {
+            await Zotero.Promise.delay(3000);
+            const retryPath = await getPdfPath(item);
+            if (retryPath) {
+              ztoolkit.log(
+                `[SemanticTagger] Retrying PDF extraction with re-resolved path: ${retryPath}`,
+              );
+              result = await extractPdfText(
+                retryPath,
+                pythonPath,
+                resolvedScriptPath,
+              );
+            }
+          }
           pdfText = result.text;
           if (result.warning) {
             new ztoolkit.ProgressWindow(addon.data.config.addonName)
