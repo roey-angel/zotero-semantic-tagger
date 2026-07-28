@@ -93,7 +93,10 @@ export function registerNotifier() {
 
           const parent = Zotero.Items.get(parentId);
           if (parent && parent.isRegularItem()) {
-            await Zotero.Promise.delay(1000); // let Zotero finish writing the attachment
+            // File-moving tools (e.g. ZotMoov) relocate the PDF right after
+            // import, so the recorded path can be transiently missing. Wait
+            // until the file is actually on disk before tagging.
+            await waitForPdfFile(parent);
             await tagItem(parent).catch((e) =>
               ztoolkit.log(
                 `[SemanticTagger] Error tagging parent of attachment ${item.id}: ${e}`,
@@ -106,6 +109,38 @@ export function registerNotifier() {
     ["item"],
     "semantic-tagger-notifier",
   );
+}
+
+/**
+ * Waits until one of the parent's PDF attachments exists on disk, then a
+ * short settle delay (a cross-filesystem move may still be flushing).
+ * Gives up after timeoutMs and lets tagging proceed with title + abstract.
+ */
+// ponytail: 2s polling; switch to an attachment-modify observer if this proves flaky
+async function waitForPdfFile(parent: Zotero.Item, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    for (const id of parent.getAttachments()) {
+      const att = Zotero.Items.get(id);
+      if (att?.attachmentContentType !== "application/pdf") continue;
+      try {
+        const p = await att.getFilePathAsync();
+        if (p && (await IOUtils.exists(p))) {
+          await Zotero.Promise.delay(1000); // settle
+          return;
+        }
+      } catch (_e) {
+        // keep waiting
+      }
+    }
+    if (Date.now() >= deadline) {
+      ztoolkit.log(
+        `[SemanticTagger] PDF file for item ${parent.id} not on disk after ${timeoutMs / 1000}s — tagging without PDF text`,
+      );
+      return;
+    }
+    await Zotero.Promise.delay(2000);
+  }
 }
 
 export function unregisterNotifier() {
