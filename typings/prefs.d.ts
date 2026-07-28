@@ -9,6 +9,7 @@ declare namespace _ZoteroTypes {
     PluginPrefsMap: {
       "watcherEnabled": boolean;
       "apiKey": string;
+      "model": string;
       "strictness": number;
       "synonymFile": string;
       "tokenWarnThreshold": number;

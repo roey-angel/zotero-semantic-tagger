@@ -27,11 +27,14 @@ export async function getPdfTextFromFulltextDB(
       try {
         const db = ft[prop];
         if (!db) continue;
-        const content = await db.valueQueryAsync(
-          "SELECT content FROM content WHERE itemID=?", [id],
-        ) as string | null | undefined;
+        const content = (await db.valueQueryAsync(
+          "SELECT content FROM content WHERE itemID=?",
+          [id],
+        )) as string | null | undefined;
         if (content?.trim()) {
-          ztoolkit.log(`[SemanticTagger] PDF text from Fulltext.${prop}: ${content.length} chars`);
+          ztoolkit.log(
+            `[SemanticTagger] PDF text from Fulltext.${prop}: ${content.length} chars`,
+          );
           return content.trim();
         }
       } catch (e) {
@@ -41,11 +44,14 @@ export async function getPdfTextFromFulltextDB(
 
     // Variant B: fulltext.sqlite is attached to Zotero's main DB as schema "fulltext"
     try {
-      const content = await Zotero.DB.valueQueryAsync(
-        "SELECT content FROM fulltext.content WHERE itemID=?", [id],
-      ) as string | null | undefined;
+      const content = (await Zotero.DB.valueQueryAsync(
+        "SELECT content FROM fulltext.content WHERE itemID=?",
+        [id],
+      )) as string | null | undefined;
       if (content?.trim()) {
-        ztoolkit.log(`[SemanticTagger] PDF text from Zotero.DB attached fulltext: ${content.length} chars`);
+        ztoolkit.log(
+          `[SemanticTagger] PDF text from Zotero.DB attached fulltext: ${content.length} chars`,
+        );
         return content.trim();
       }
     } catch (_e) {
@@ -56,10 +62,17 @@ export async function getPdfTextFromFulltextDB(
     try {
       const key = attachment?.key;
       if (key) {
-        const cachePath = PathUtils.join(Zotero.DataDirectory.dir, "storage", key, ".zotero-ft-cache");
+        const cachePath = PathUtils.join(
+          Zotero.DataDirectory.dir,
+          "storage",
+          key,
+          ".zotero-ft-cache",
+        );
         const text = await IOUtils.readUTF8(cachePath).catch(() => null);
         if (text?.trim()) {
-          ztoolkit.log(`[SemanticTagger] PDF text from storage cache (key ${key}): ${text.length} chars`);
+          ztoolkit.log(
+            `[SemanticTagger] PDF text from storage cache (key ${key}): ${text.length} chars`,
+          );
           return text.trim();
         }
       }
@@ -91,7 +104,9 @@ export async function getPdfTextFromZoteroCache(
     const cachePath = PathUtils.join(storageDir, ".zotero-ft-cache");
     const text = await IOUtils.readUTF8(cachePath).catch(() => null);
     if (text?.trim()) {
-      ztoolkit.log(`[SemanticTagger] PDF text from .zotero-ft-cache: ${text.length} chars`);
+      ztoolkit.log(
+        `[SemanticTagger] PDF text from .zotero-ft-cache: ${text.length} chars`,
+      );
       return text.trim();
     }
   }
@@ -105,11 +120,15 @@ export async function getPdfTextFromZoteroCache(
  * used. Otherwise, the bundled script is copied from the XPI to the Zotero
  * data directory on first call and that path is returned.
  */
-export async function resolvePythonScript(customScriptPath: string): Promise<string> {
+export async function resolvePythonScript(
+  customScriptPath: string,
+): Promise<string> {
   if (customScriptPath) return customScriptPath;
   if (_cachedScriptPath) {
     // Re-extract if previously cached file was corrupted (bug: getContentsAsync returned XHR object)
-    const head = await IOUtils.readUTF8(_cachedScriptPath).catch(() => "").then(t => t.slice(0, 20));
+    const head = await IOUtils.readUTF8(_cachedScriptPath)
+      .catch(() => "")
+      .then((t) => t.slice(0, 20));
     if (!head.startsWith("[object")) return _cachedScriptPath;
     _cachedScriptPath = null; // force re-extraction
   }
@@ -126,16 +145,20 @@ export async function resolvePythonScript(customScriptPath: string): Promise<str
     const scriptContent = await resp.text();
     await IOUtils.writeUTF8(destPath, scriptContent);
     _cachedScriptPath = destPath;
-    ztoolkit.log(`[SemanticTagger] Bundled Python script extracted to: ${destPath}`);
+    ztoolkit.log(
+      `[SemanticTagger] Bundled Python script extracted to: ${destPath}`,
+    );
     return destPath;
   } catch (e) {
-    ztoolkit.log(`[SemanticTagger] Failed to extract bundled Python script: ${e}`);
+    ztoolkit.log(
+      `[SemanticTagger] Failed to extract bundled Python script: ${e}`,
+    );
     return "";
   }
 }
 
 const PDF_WARN =
-  "PDF found but could not extract text (Python/PyMuPDF not available) — tagged from title + abstract only";
+  "PDF text extraction failed — check Python path in Settings → Semantic Tagger (tagging from title + abstract only)";
 
 /**
  * Extracts raw text from a PDF file by invoking the Python helper script.
@@ -146,12 +169,16 @@ export async function extractPdfText(
   pythonPath: string,
   scriptPath: string,
 ): Promise<PdfExtractionResult> {
+  // Random suffix: avoids predictable temp names in a shared temp dir
   const tmpPath = PathUtils.join(
     PathUtils.tempDir,
-    `zst-pdf-${Date.now()}.txt`,
+    `zst-pdf-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.txt`,
   );
+  const errPath = tmpPath + ".err";
 
-  ztoolkit.log(`[SemanticTagger] PDF extraction (Python): python="${pythonPath}" script="${scriptPath}" pdf="${pdfPath}"`);
+  ztoolkit.log(
+    `[SemanticTagger] PDF extraction (Python): python="${pythonPath}" script="${scriptPath}" pdf="${pdfPath}"`,
+  );
 
   try {
     // Run via bash so that Python environments that need LD_LIBRARY_PATH
@@ -163,26 +190,42 @@ export async function extractPdfText(
     // Zotero fulltext DB and cache-file approaches still work on Windows.
     const condaLibPath = pythonPath.replace(/\/bin\/python[0-9.]*$/, "/lib");
     const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
-    const shellCmd = `LD_LIBRARY_PATH=${q(condaLibPath)}:"$LD_LIBRARY_PATH" ${q(pythonPath)} ${q(scriptPath)} ${q(pdfPath)} ${q(tmpPath)}`;
-    const exitValue = await Zotero.Utilities.Internal.exec("/bin/bash", ["-c", shellCmd]);
+    const shellCmd = `LD_LIBRARY_PATH=${q(condaLibPath)}:"$LD_LIBRARY_PATH" ${q(pythonPath)} ${q(scriptPath)} ${q(pdfPath)} ${q(tmpPath)} 2>${q(errPath)}`;
+    const exitValue = await Zotero.Utilities.Internal.exec("/bin/bash", [
+      "-c",
+      shellCmd,
+    ]);
 
-    ztoolkit.log(`[SemanticTagger] PDF extraction exec returned: ${JSON.stringify(exitValue)}`);
+    ztoolkit.log(
+      `[SemanticTagger] PDF extraction exec returned: ${JSON.stringify(exitValue)}`,
+    );
 
     const text = await IOUtils.readUTF8(tmpPath).catch((e) => {
-      ztoolkit.log(`[SemanticTagger] PDF extraction: failed to read tmpPath: ${e}`);
+      ztoolkit.log(
+        `[SemanticTagger] PDF extraction: failed to read output file: ${e}`,
+      );
       return null;
     });
     if (!text?.trim()) {
-      ztoolkit.log(`[SemanticTagger] PDF extraction: tmpPath empty or missing`);
+      const stderr = await IOUtils.readUTF8(errPath).catch(() => "");
+      ztoolkit.log(
+        `[SemanticTagger] PDF extraction: empty output. Python stderr: ${stderr || "(none)"}`,
+      );
       return { text: null, warning: PDF_WARN };
     }
-    ztoolkit.log(`[SemanticTagger] PDF extraction success: ${text.length} chars`);
+    ztoolkit.log(
+      `[SemanticTagger] PDF extraction success: ${text.length} chars`,
+    );
     return { text: text.trim(), warning: null };
   } catch (e) {
-    ztoolkit.log(`[SemanticTagger] PDF extraction exception: ${e}`);
+    const stderr = await IOUtils.readUTF8(errPath).catch(() => "");
+    ztoolkit.log(
+      `[SemanticTagger] PDF extraction exception: ${e}. Python stderr: ${stderr || "(none)"}`,
+    );
     return { text: null, warning: PDF_WARN };
   } finally {
     IOUtils.remove(tmpPath).catch(() => {});
+    IOUtils.remove(errPath).catch(() => {});
   }
 }
 

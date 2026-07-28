@@ -1,8 +1,14 @@
-import { getString, initLocale } from "./utils/locale";
+import { getString, getLocaleID, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 import { registerNotifier, unregisterNotifier } from "./modules/notifier";
 import { registerPrefsScripts } from "./modules/preferenceScript";
-import { tagItem } from "./modules/tagger";
+import { tagItem, resumeSession } from "./modules/tagger";
+import { config } from "../package.json";
+
+// Use chrome:// URL registered in bootstrap.js. Zotero 9's MenuManager inserts the
+// icon URL into CSS `url(...)` unquoted, so data: URIs (commas) and some
+// moz-extension:// URIs are rejected by the CSS parser — chrome:// works.
+const MENU_ICON = `chrome://${config.addonRef}/content/icons/favicon@0.5x.png`;
 
 async function onStartup() {
   await Promise.all([
@@ -21,6 +27,23 @@ async function onStartup() {
     image: `${rootURI}content/icons/favicon@0.5x.png`,
   });
 
+  // Register the right-click menu item once globally (Zotero 9 native API).
+  Zotero.MenuManager.registerMenu({
+    menuID: "semantic-tagger-tag-selected",
+    pluginID: addon.data.config.addonID,
+    target: "main/library/item",
+    menus: [
+      {
+        menuType: "menuitem",
+        l10nID: getLocaleID("menuitem-tag-selected"),
+        icon: MENU_ICON,
+        onCommand: (_event: Event) => {
+          addon.hooks.onMenuTagSelected();
+        },
+      },
+    ],
+  });
+
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
@@ -31,20 +54,13 @@ async function onStartup() {
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   addon.data.ztoolkit = createZToolkit();
 
+  // Load both FTL files so all plugin strings are available in the window's l10n.
   win.MozXULElement.insertFTLIfNeeded(
     `${addon.data.config.addonRef}-mainWindow.ftl`,
   );
-
-  // Register right-click menu item for manual batch tagging
-  ztoolkit.Menu.register("item", {
-    tag: "menuitem",
-    id: "semantic-tagger-tag-selected",
-    label: getString("menuitem-tag-selected"),
-    icon: `${rootURI}content/icons/favicon@0.5x.png`,
-    commandListener: (_ev) => {
-      addon.hooks.onMenuTagSelected();
-    },
-  });
+  win.MozXULElement.insertFTLIfNeeded(
+    `${addon.data.config.addonRef}-addon.ftl`,
+  );
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
@@ -54,6 +70,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 
 function onShutdown(): void {
   unregisterNotifier();
+  Zotero.MenuManager.unregisterMenu("semantic-tagger-tag-selected");
   ztoolkit.unregisterAll();
   addon.data.dialog?.window?.close();
   addon.data.alive = false;
@@ -81,6 +98,8 @@ async function onPrefsEvent(type: string, data: { [key: string]: any }) {
 }
 
 async function onMenuTagSelected() {
+  // An explicit manual action lifts any session pause (e.g. after topping up credits)
+  resumeSession();
   const items = Zotero.getActiveZoteroPane().getSelectedItems();
   if (!items || items.length === 0) {
     new ztoolkit.ProgressWindow(addon.data.config.addonName)
@@ -94,7 +113,9 @@ async function onMenuTagSelected() {
     closeOnClick: false,
   })
     .createLine({
-      text: getString("notice-tagging-start", { args: { count: items.length } }),
+      text: getString("notice-tagging-start", {
+        args: { count: items.length },
+      }),
       type: "default",
       progress: 0,
     })
@@ -103,7 +124,9 @@ async function onMenuTagSelected() {
   let done = 0;
   for (const item of items) {
     await tagItem(item).catch((e) =>
-      ztoolkit.log(`[SemanticTagger] Batch tag error for item ${item.id}: ${e}`),
+      ztoolkit.log(
+        `[SemanticTagger] Batch tag error for item ${item.id}: ${e}`,
+      ),
     );
     done++;
     progressWin.changeLine({

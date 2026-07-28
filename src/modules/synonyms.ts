@@ -13,7 +13,9 @@ export async function loadSynonyms(filePath: string): Promise<string[][]> {
     const text = await IOUtils.readUTF8(filePath);
     return parseSynonymText(text);
   } catch (e) {
-    ztoolkit.log(`[SemanticTagger] Could not load synonyms from ${filePath}: ${e}`);
+    ztoolkit.log(
+      `[SemanticTagger] Could not load synonyms from ${filePath}: ${e}`,
+    );
     return [];
   }
 }

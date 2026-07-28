@@ -18,6 +18,9 @@ export type FluentMessageId =
   | 'pref-strictness-strict'
   | 'pref-synonyms-label'
   | 'pref-title'
+  | 'pref-token-warn-hint'
+  | 'pref-token-warn-label'
+  | 'pref-use-pdf'
   | 'pref-watcher-enabled'
   | 'startup-begin'
   | 'startup-finish';

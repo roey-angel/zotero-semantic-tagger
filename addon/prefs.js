@@ -1,5 +1,6 @@
 pref("watcherEnabled", true);
 pref("apiKey", "");
+pref("model", "claude-sonnet-5");
 pref("strictness", 50);
 pref("synonymFile", "");
 pref("tokenWarnThreshold", 20000);

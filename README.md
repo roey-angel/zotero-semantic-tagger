@@ -28,16 +28,16 @@ When a paper is added to your library, the plugin reads its title, abstract, and
 
 ## Configuration
 
-| Setting | Description |
-|---|---|
-| Automatically tag new items | Enable/disable the watcher that fires on import |
-| Claude API Key | Your Anthropic API key |
-| Strictness | Controls tag count and selectivity: lax (0) = 6–12 broad tags; strict (100) = 2–4 primary-focus tags only |
-| Synonym file | Path to a `.txt` file defining synonym groups (see below) |
-| Warn after every N tokens | Show a dialog when cumulative session token usage crosses a multiple of N (0 = never warn) |
-| Use PDF text | Also extract and send PDF text to Claude (uses more tokens; disabled by default) |
-| Python executable | Full path to the Python interpreter, or just `python3` if it is on your PATH. Only needed if "Use PDF text" is enabled and Zotero has not indexed the file yet. |
-| extract_pdf.py path (optional override) | Use a custom extraction script instead of the bundled one |
+| Setting                                 | Description                                                                                                                                                     |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Automatically tag new items             | Enable/disable the watcher that fires on import                                                                                                                 |
+| Claude API Key                          | Your Anthropic API key                                                                                                                                          |
+| Strictness                              | Controls tag count and selectivity: lax (0) = 6–12 broad tags; strict (100) = 2–4 primary-focus tags only                                                       |
+| Synonym file                            | Path to a `.txt` file defining synonym groups (see below)                                                                                                       |
+| Warn after every N tokens               | Show a dialog when cumulative session token usage crosses a multiple of N (0 = never warn)                                                                      |
+| Use PDF text                            | Also extract and send PDF text to Claude (uses more tokens; disabled by default)                                                                                |
+| Python executable                       | Full path to the Python interpreter, or just `python3` if it is on your PATH. Only needed if "Use PDF text" is enabled and Zotero has not indexed the file yet. |
+| extract_pdf.py path (optional override) | Use a custom extraction script instead of the bundled one                                                                                                       |
 
 ## Synonym file format
 
@@ -55,6 +55,7 @@ soil organic carbon; SOC; soil carbon
 ### Trigger
 
 The plugin fires when:
+
 - A new item is added (manual import, browser connector, drag-and-drop)
 - A paper is added via **Add Item by Identifier** (DOI, ISBN, arXiv ID)
 - A PDF is attached to an existing item via **Find Full Text**
@@ -66,17 +67,17 @@ The plugin fires when:
 2. **Abstract** — from Zotero item metadata
 3. **PDF full text** (only when "Use PDF text" is enabled) — the plugin tries the following methods in order, using the first that succeeds. The first 4,000 characters of the result are sent to Claude.
 
-| # | Method | When it works |
-|---|---|---|
-| 1 | **Zotero fulltext database** | Zotero has already indexed the PDF (happens automatically in the background). Works regardless of where the file is stored, including with file-moving tools like ZotMoov. |
-| 2 | **`.zotero-ft-cache` file** | Zotero's per-item cache file exists alongside the PDF (standard Zotero storage only). |
-| 3 | **PyMuPDF** | Python 3 and PyMuPDF are available. The bundled `extract_pdf.py` script is invoked as a subprocess. Falls back to title + abstract only if this also fails, with a notification. |
+| #   | Method                       | When it works                                                                                                                                                                    |
+| --- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Zotero fulltext database** | Zotero has already indexed the PDF (happens automatically in the background). Works regardless of where the file is stored, including with file-moving tools like ZotMoov.       |
+| 2   | **`.zotero-ft-cache` file**  | Zotero's per-item cache file exists alongside the PDF (standard Zotero storage only).                                                                                            |
+| 3   | **PyMuPDF**                  | Python 3 and PyMuPDF are available. The bundled `extract_pdf.py` script is invoked as a subprocess. Falls back to title + abstract only if this also fails, with a notification. |
 
 If none of the methods succeed, the item is still tagged — from title and abstract only — and a warning notification is shown.
 
 ### Claude API call
 
-A single call is made to `claude-sonnet-4-6`. The prompt is:
+A single call is made to `claude-sonnet-5` (configurable via the hidden preference `extensions.zotero.semantictagger.model` in Zotero's Config Editor). The prompt is:
 
 ---
 
@@ -126,11 +127,11 @@ PDF text (excerpt):
 
 The strictness setting controls both the number of tags and how liberally they are applied:
 
-| Setting | Tag count | Rule |
-|---|---|---|
-| **Lax (0–33)** | 6–12 | Apply a tag if the paper meaningfully mentions, uses, or engages with the concept — even in passing, as background, or in the methods section |
-| **Moderate (34–66)** | 4–7 | Apply a tag if the paper substantially discusses or relies on the concept, even if it is not the primary focus |
-| **Strict (67–100)** | 2–4 | Only apply a tag if it describes a central research topic — something the paper directly investigates, develops, or makes a primary contribution to |
+| Setting              | Tag count | Rule                                                                                                                                                |
+| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lax (0–33)**       | 6–12      | Apply a tag if the paper meaningfully mentions, uses, or engages with the concept — even in passing, as background, or in the methods section       |
+| **Moderate (34–66)** | 4–7       | Apply a tag if the paper substantially discusses or relies on the concept, even if it is not the primary focus                                      |
+| **Strict (67–100)**  | 2–4       | Only apply a tag if it describes a central research topic — something the paper directly investigates, develops, or makes a primary contribution to |
 
 ### Safety filter
 
@@ -187,6 +188,7 @@ npx tsc --noEmit     # type-check only
 **Node ≥ 20.12.0** is required to build (`npm run build`). The build will fail on Node 18 due to a dependency on `util.styleText` introduced in Node 20.
 
 Python helper setup (only needed if you enable "Use PDF text"):
+
 ```bash
 pip install PyMuPDF
 ```

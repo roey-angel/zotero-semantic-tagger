@@ -15,18 +15,24 @@
 
   <!-- Claude API key -->
   <hbox align="center">
-    <html:label for="zotero-prefpane-__addonRef__-apikey" data-l10n-id="pref-apikey-label" />
+    <html:label
+      for="zotero-prefpane-__addonRef__-apikey"
+      data-l10n-id="pref-apikey-label"
+    />
     <html:input
       type="password"
       id="zotero-prefpane-__addonRef__-apikey"
       preference="apiKey"
-      style="flex:1; margin-left:8px;"
+      style="flex: 1; margin-left: 8px"
     />
   </hbox>
 
   <!-- Strictness slider -->
   <hbox align="center">
-    <html:label for="zotero-prefpane-__addonRef__-strictness" data-l10n-id="pref-strictness-label" />
+    <html:label
+      for="zotero-prefpane-__addonRef__-strictness"
+      data-l10n-id="pref-strictness-label"
+    />
     <html:input
       type="range"
       id="zotero-prefpane-__addonRef__-strictness"
@@ -34,7 +40,7 @@
       min="0"
       max="100"
       step="1"
-      style="flex:1; margin: 0 8px;"
+      style="flex: 1; margin: 0 8px"
     />
     <html:label data-l10n-id="pref-strictness-lax" />
     <html:label>–</html:label>
@@ -43,26 +49,32 @@
 
   <!-- Synonym file -->
   <hbox align="center">
-    <html:label for="__addonRef__-synonyms-path" data-l10n-id="pref-synonyms-label" />
+    <html:label
+      for="__addonRef__-synonyms-path"
+      data-l10n-id="pref-synonyms-label"
+    />
     <html:input
       type="text"
       id="__addonRef__-synonyms-path"
       preference="synonymFile"
-      style="flex:1; margin: 0 8px;"
+      style="flex: 1; margin: 0 8px"
     />
     <button id="__addonRef__-synonyms-browse" data-l10n-id="pref-browse" />
   </hbox>
 
   <!-- Token warning threshold -->
   <hbox align="center">
-    <html:label for="zotero-prefpane-__addonRef__-token-warn" data-l10n-id="pref-token-warn-label" />
+    <html:label
+      for="zotero-prefpane-__addonRef__-token-warn"
+      data-l10n-id="pref-token-warn-label"
+    />
     <html:input
       type="number"
       id="zotero-prefpane-__addonRef__-token-warn"
       preference="tokenWarnThreshold"
       min="0"
       step="1000"
-      style="width:80px; margin: 0 8px;"
+      style="width: 80px; margin: 0 8px"
     />
     <html:label data-l10n-id="pref-token-warn-hint" />
   </hbox>
@@ -76,24 +88,30 @@
 
   <!-- Python path -->
   <hbox align="center">
-    <html:label for="zotero-prefpane-__addonRef__-python" data-l10n-id="pref-python-label" />
+    <html:label
+      for="zotero-prefpane-__addonRef__-python"
+      data-l10n-id="pref-python-label"
+    />
     <html:input
       type="text"
       id="zotero-prefpane-__addonRef__-python"
       preference="pythonPath"
       placeholder="python3  (or full path, e.g. /usr/local/bin/python3 or C:\Python313\python.exe)"
-      style="flex:1; margin: 0 8px;"
+      style="flex: 1; margin: 0 8px"
     />
   </hbox>
 
   <!-- extract_pdf.py script path -->
   <hbox align="center">
-    <html:label for="__addonRef__-script-path" data-l10n-id="pref-script-label" />
+    <html:label
+      for="__addonRef__-script-path"
+      data-l10n-id="pref-script-label"
+    />
     <html:input
       type="text"
       id="__addonRef__-script-path"
       preference="scriptPath"
-      style="flex:1; margin: 0 8px;"
+      style="flex: 1; margin: 0 8px"
     />
     <button id="__addonRef__-script-browse" data-l10n-id="pref-browse" />
   </hbox>
@@ -102,7 +120,7 @@
     <html:label
       data-l10n-id="pref-help"
       data-l10n-args='{"version":"__buildVersion__"}'
-      style="margin-top:12px; color:gray;"
+      style="margin-top: 12px; color: gray"
     />
   </vbox>
 </groupbox>

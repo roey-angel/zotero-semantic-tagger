@@ -27,7 +27,10 @@ export function registerNotifier() {
         _extraData: Record<string, unknown>,
       ) => {
         if (event !== "add" || type !== "item") return;
-        const watcherEnabled = Zotero.Prefs.get(`${PREFS}.watcherEnabled`, true);
+        const watcherEnabled = Zotero.Prefs.get(
+          `${PREFS}.watcherEnabled`,
+          true,
+        );
         if (!watcherEnabled) return;
 
         const win = Zotero.getMainWindow();
@@ -55,12 +58,13 @@ export function registerNotifier() {
               const latestItem = Zotero.Items.get(itemId);
               if (latestItem && latestItem.isRegularItem()) {
                 await tagItem(latestItem).catch((e) =>
-                  ztoolkit.log(`[SemanticTagger] Error tagging item ${itemId}: ${e}`),
+                  ztoolkit.log(
+                    `[SemanticTagger] Error tagging item ${itemId}: ${e}`,
+                  ),
                 );
               }
             }, FIND_FULL_TEXT_WAIT_MS);
             _pendingTags.set(itemId, timer as number);
-
           } else if (
             item.isAttachment() &&
             item.attachmentContentType === "application/pdf" &&
