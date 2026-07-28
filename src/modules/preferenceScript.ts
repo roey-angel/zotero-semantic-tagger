@@ -21,10 +21,10 @@ export async function registerPrefsScripts(_window: Window) {
  */
 async function loadModels(win: Window) {
   const doc = win.document;
-  const sel = doc.getElementById(
-    `zotero-prefpane-${REF}-model`,
-  ) as HTMLSelectElement | null;
-  if (!sel) return;
+  // XUL menulist — html:select popups don't open inside Zotero pref panes
+  const sel = doc.getElementById(`zotero-prefpane-${REF}-model`) as any;
+  const popup = sel?.querySelector("menupopup");
+  if (!sel || !popup) return;
 
   const current =
     ((Zotero.Prefs.get(`${PREFS}.model`, true) as string) || "").trim() ||
@@ -73,15 +73,12 @@ async function loadModels(win: Window) {
     models.unshift({ id: current, label: current });
   }
 
-  sel.textContent = "";
+  popup.textContent = "";
   for (const m of models) {
-    const opt = doc.createElementNS(
-      "http://www.w3.org/1999/xhtml",
-      "option",
-    ) as HTMLOptionElement;
-    opt.value = m.id;
-    opt.textContent = m.label;
-    sel.appendChild(opt);
+    const item = (doc as any).createXULElement("menuitem");
+    item.setAttribute("label", m.label);
+    item.setAttribute("value", m.id);
+    popup.appendChild(item);
   }
   sel.value = current;
 }
@@ -158,13 +155,12 @@ function bindPrefEvents(win: Window) {
       void loadModels(win);
     });
 
-  // Model dropdown
-  doc
-    .getElementById(`zotero-prefpane-${REF}-model`)
-    ?.addEventListener("change", (e: Event) => {
-      const v = (e.target as HTMLSelectElement).value;
-      if (v) Zotero.Prefs.set(`${PREFS}.model`, v, true);
-    });
+  // Model dropdown (XUL menulist fires "command", not "change")
+  const modelSel = doc.getElementById(`zotero-prefpane-${REF}-model`) as any;
+  modelSel?.addEventListener("command", () => {
+    const v = modelSel.value as string;
+    if (v) Zotero.Prefs.set(`${PREFS}.model`, v, true);
+  });
 
   // Strictness slider
   doc
