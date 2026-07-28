@@ -1,6 +1,6 @@
 # Semantic Tagger
 
-A Zotero 7 plugin that automatically applies semantic tags to scientific papers using the Claude API.
+A Zotero 7+ plugin (tested through Zotero 9) that automatically applies semantic tags to scientific papers using the Claude API.
 
 When a paper is added to your library, the plugin reads its title, abstract, and PDF text, then asks Claude to select matching tags from your **existing** Zotero tag library. It never creates new tags.
 
@@ -16,14 +16,14 @@ When a paper is added to your library, the plugin reads its title, abstract, and
 
 ## Requirements
 
-- Zotero 7
+- Zotero 7 or later
 - A Claude API key from [console.anthropic.com](https://console.anthropic.com)
-- Python 3 with PyMuPDF installed (`pip install PyMuPDF`) — optional, used as a fallback for PDF text extraction when Zotero has not yet indexed the file
+- Python 3 with PyMuPDF installed (`pip install PyMuPDF`) — only if you enable "Use PDF text". Freshly imported PDFs are not indexed by Zotero yet, so this is the path that normally runs.
 
 ## Installation
 
 1. Download the latest `.xpi` from the [Releases](../../releases) page
-2. In Zotero: **Tools → Add-ons → Install Add-on From File**
+2. In Zotero: **Tools → Plugins → gear icon → Install Plugin From File**
 3. Open **Edit → Preferences → Semantic Tagger** and enter your Claude API key
 
 ## Configuration
@@ -68,11 +68,14 @@ The plugin fires when:
 2. **Abstract** — from Zotero item metadata
 3. **PDF full text** (only when "Use PDF text" is enabled) — the plugin tries the following methods in order, using the first that succeeds. The first 4,000 characters of the result are sent to Claude.
 
-| #   | Method                       | When it works                                                                                                                                                                    |
-| --- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Zotero fulltext database** | Zotero has already indexed the PDF (happens automatically in the background). Works regardless of where the file is stored, including with file-moving tools like ZotMoov.       |
-| 2   | **`.zotero-ft-cache` file**  | Zotero's per-item cache file exists alongside the PDF (standard Zotero storage only).                                                                                            |
-| 3   | **PyMuPDF**                  | Python 3 and PyMuPDF are available. The bundled `extract_pdf.py` script is invoked as a subprocess. Falls back to title + abstract only if this also fails, with a notification. |
+| #   | Method                      | When it works                                                                                                                                                                                         |
+| --- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **`.zotero-ft-cache` file** | Zotero has already indexed the PDF (this happens automatically in the background, so it usually misses on a freshly imported paper). Checked in the attachment's storage folder and next to the file. |
+| 2   | **PyMuPDF**                 | Python 3 and PyMuPDF are available. The bundled `extract_pdf.py` script is invoked as a subprocess.                                                                                                   |
+
+Because a newly imported PDF is normally not indexed yet, method 2 is the one that runs most of the time — so install PyMuPDF if you enable this option.
+
+If a file-moving plugin (ZotMoov, ZotFile) is relocating your PDFs, the plugin waits for the file to stop moving before reading it, and retries once against the new location if extraction still comes up empty.
 
 If none of the methods succeed, the item is still tagged — from title and abstract only — and a warning notification is shown.
 
@@ -171,7 +174,9 @@ The worst-case outcome of a successful injection is that the wrong tags from you
 
 ### Python PDF extraction
 
-The Python-based extraction path (`extract_pdf.py`) works on **macOS and Linux** only. On Windows, the subprocess call will fail gracefully and the plugin falls back to title + abstract (or the Zotero fulltext database if the file has been indexed).
+The Python-based extraction path (`extract_pdf.py`) works on **macOS and Linux** only — it is invoked through `/bin/bash`, which Windows does not have. On Windows the call fails gracefully and the plugin falls back to Zotero's own full-text cache (for already-indexed items) or to title + abstract.
+
+The script is run with the interpreter you configure and is given only the PDF path and a temporary output path; all arguments are shell-quoted, so paths containing spaces or quotes cannot break out of the command.
 
 ---
 
