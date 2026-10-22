@@ -1,7 +1,7 @@
 {
   "name": "zotero-semantic-tagger",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Automatically tag Zotero items using semantic analysis and the Claude API",
   "config": {
     "addonName": "Semantic Tagger",
