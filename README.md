@@ -1,6 +1,6 @@
 # Semantic Tagger
 
-A Zotero 7+ plugin (tested through Zotero 9) that automatically applies semantic tags to scientific papers using the Claude API.
+A Zotero 7+ plugin (tested through Zotero 10) that automatically applies semantic tags to scientific papers using the Claude API.
 
 When a paper is added to your library, the plugin reads its title, abstract, and PDF text, then asks Claude to select matching tags from your **existing** Zotero tag library. It never creates new tags.
 
