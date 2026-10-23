@@ -20,6 +20,17 @@ When a paper is added to your library, the plugin reads its title, abstract, and
 - A Claude API key from [console.anthropic.com](https://console.anthropic.com)
 - Python 3 with PyMuPDF installed (`pip install PyMuPDF`) — only if you enable "Use PDF text". Freshly imported PDFs are not indexed by Zotero yet, so this is the path that normally runs.
 
+## Cost
+
+You pay Anthropic directly for API usage. Rough estimates per **1,000 papers** for a library of ~500 tags, tagging from title + abstract:
+
+| Model              | Tagged one at a time (on import) | Batch-tagged (right-click) |
+| ------------------ | -------------------------------- | -------------------------- |
+| `claude-sonnet-5`  | ~$7                              | ~$2                        |
+| `claude-haiku-4-5` | ~$3.50                           | ~$1                        |
+
+Batch tagging is cheaper because the tag library is cached between calls. Enabling **Use PDF text** adds roughly $2 (Sonnet) or $1 (Haiku) per 1,000 papers, and a larger tag library raises the per-import cost. These are estimates — your [Console usage page](https://console.anthropic.com) shows the real numbers.
+
 ## Installation
 
 1. Download the latest `.xpi` from the [Releases](../../releases) page
