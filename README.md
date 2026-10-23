@@ -4,6 +4,8 @@ A Zotero 7+ plugin (tested through Zotero 9) that automatically applies semantic
 
 When a paper is added to your library, the plugin reads its title, abstract, and PDF text, then asks Claude to select matching tags from your **existing** Zotero tag library. It never creates new tags.
 
+![Right-click → Tag Selected Items applies tags from the existing library](doc/demo.gif)
+
 ## Features
 
 - Automatically tags new items on import
