@@ -5,6 +5,7 @@ import {
   getPdfTextFromZoteroCache,
   resolvePythonScript,
 } from "./pdfExtractor";
+import { buildSystemPrompt } from "./prompt";
 import { loadSynonyms } from "./synonyms";
 
 let _sessionTokens = 0;
@@ -166,8 +167,7 @@ export async function tagItem(item: Zotero.Item): Promise<void> {
     abstract,
     pdfText,
     libraryTags,
-    synonymGroups,
-    strictness,
+    systemPrompt: buildSystemPrompt({ strictness, synonymGroups }),
   });
 
   if (apiError) return; // notification already shown inside queryClaudeForTags
@@ -226,8 +226,7 @@ interface ClaudeTagQuery {
   abstract: string;
   pdfText: string | null;
   libraryTags: string[];
-  synonymGroups: string[][];
-  strictness: number; // 0 (very lax) to 100 (very strict)
+  systemPrompt: string;
 }
 
 interface ClaudeTagResult {
@@ -240,57 +239,14 @@ interface ClaudeTagResult {
 async function queryClaudeForTags(
   query: ClaudeTagQuery,
 ): Promise<ClaudeTagResult> {
-  const {
-    apiKey,
-    model,
-    title,
-    abstract,
-    pdfText,
-    libraryTags,
-    synonymGroups,
-    strictness,
-  } = query;
-
-  const [tagMin, tagMax, strictnessInstruction] =
-    strictness > 66
-      ? [
-          2,
-          4,
-          "Be very strict: select AT MOST 4 tags (ideally 2–3). Only apply a tag if it describes a central research topic of the paper — something the paper directly investigates, develops, or makes a primary contribution to. If unsure, leave it out.",
-        ]
-      : strictness > 33
-        ? [
-            4,
-            7,
-            "Be moderate: select 4–7 tags. Apply a tag if the paper substantially discusses or relies on the concept, even if it is not the primary focus.",
-          ]
-        : [
-            6,
-            12,
-            "Be broad: select 6–12 tags. Apply a tag if the paper meaningfully mentions, uses, or engages with the concept — even in passing, as background, or in the methods section.",
-          ];
-
-  const synonymSection =
-    synonymGroups.length > 0
-      ? `\nSynonym groups (treat all entries in a group as equivalent):\n${synonymGroups
-          .map((g) => g.join("; "))
-          .join("\n")}`
-      : "";
+  const { apiKey, model, title, abstract, pdfText, libraryTags, systemPrompt } =
+    query;
 
   const contentParts: string[] = [];
   if (title) contentParts.push(`Title: ${title}`);
   if (abstract) contentParts.push(`Abstract: ${abstract}`);
   if (pdfText)
     contentParts.push(`PDF text (excerpt):\n${pdfText.slice(0, 4000)}`);
-
-  const systemPrompt = `You are a scientific literature tagger. Your task is to select tags from a provided library that best describe a given paper.
-
-RULES:
-1. You may ONLY use tags from the provided library — never invent new tags.
-2. Select between ${tagMin} and ${tagMax} tags. Stay within this range — it is set by the user's strictness preference.
-3. ${strictnessInstruction}
-4. Ignore the references/bibliography section of the paper — do not use cited works to infer tags.
-5. Return ONLY a JSON array of tag strings, exactly as they appear in the library. No explanation.${synonymSection}`;
 
   // The tag library is identical across all calls in a session, so mark it for
   // prompt caching (GA — no beta header needed). Anthropic caches it after the
@@ -313,7 +269,8 @@ RULES:
         // effort is the documented cheap/fast configuration for it.
         thinking: { type: "disabled" },
         output_config: { effort: "low" },
-        system: systemPrompt,
+        // A custom prompt can render empty; the API rejects an empty system
+        ...(systemPrompt ? { system: systemPrompt } : {}),
         messages: [
           {
             role: "user",

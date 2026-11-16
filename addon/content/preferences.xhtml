@@ -77,6 +77,30 @@
     <button id="__addonRef__-synonyms-browse" data-l10n-id="pref-browse" />
   </hbox>
 
+  <!-- System prompt. An empty pref means "use the built-in default", so the box
+       shows the default while the pref is empty — no preference= attribute
+       here, or a binding would load the empty value over it. -->
+  <vbox style="margin-top: 8px">
+    <html:label
+      for="__addonRef__-system-prompt"
+      data-l10n-id="pref-system-prompt-label"
+    />
+    <html:textarea
+      id="__addonRef__-system-prompt"
+      rows="12"
+      spellcheck="false"
+      style="margin: 4px 0; font-family: monospace; resize: vertical"
+    />
+    <hbox align="center">
+      <html:label data-l10n-id="pref-system-prompt-hint" style="color: gray" />
+      <spacer flex="1" />
+      <button
+        id="__addonRef__-system-prompt-reset"
+        data-l10n-id="pref-system-prompt-reset"
+      />
+    </hbox>
+  </vbox>
+
   <!-- Token warning threshold -->
   <hbox align="center">
     <html:label

@@ -3,6 +3,7 @@ pref("apiKey", "");
 pref("model", "claude-sonnet-5");
 pref("strictness", 50);
 pref("synonymFile", "");
+pref("systemPrompt", "");
 pref("tokenWarnThreshold", 20000);
 pref("usePdf", false);
 pref("pythonPath", "");

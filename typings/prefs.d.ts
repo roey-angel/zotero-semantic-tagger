@@ -12,6 +12,7 @@ declare namespace _ZoteroTypes {
       "model": string;
       "strictness": number;
       "synonymFile": string;
+      "systemPrompt": string;
       "tokenWarnThreshold": number;
       "usePdf": boolean;
       "pythonPath": string;
