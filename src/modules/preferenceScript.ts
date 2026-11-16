@@ -1,4 +1,5 @@
 import { config } from "../../package.json";
+import { DEFAULT_SYSTEM_PROMPT, getSystemPromptTemplate } from "./prompt";
 
 const PREFS = config.prefsPrefix;
 const REF = config.addonRef;
@@ -111,6 +112,7 @@ function loadPrefs(win: Window) {
     `${REF}-script-path`,
     (Zotero.Prefs.get(`${PREFS}.scriptPath`, true) as string) ?? "",
   );
+  setInput(doc, `${REF}-system-prompt`, getSystemPromptTemplate());
   setInput(
     doc,
     `zotero-prefpane-${REF}-token-warn`,
@@ -119,7 +121,10 @@ function loadPrefs(win: Window) {
 }
 
 function setInput(doc: Document, id: string, value: string) {
-  const el = doc.getElementById(id) as HTMLInputElement | null;
+  const el = doc.getElementById(id) as
+    | HTMLInputElement
+    | HTMLTextAreaElement
+    | null;
   if (el) el.value = value;
 }
 
@@ -212,6 +217,21 @@ function bindPrefEvents(win: Window) {
       );
     });
 
+  // System prompt. Saved on every keystroke because a textarea's "change"
+  // event may never fire — closing the pref window does not blur it.
+  doc
+    .getElementById(`${REF}-system-prompt`)
+    ?.addEventListener("input", (e: Event) => {
+      saveSystemPrompt((e.target as HTMLTextAreaElement).value);
+    });
+
+  doc
+    .querySelector(`#${REF}-system-prompt-reset`)
+    ?.addEventListener("click", () => {
+      saveSystemPrompt("");
+      setInput(doc, `${REF}-system-prompt`, DEFAULT_SYSTEM_PROMPT);
+    });
+
   // Browse button for extract_pdf.py script
   doc
     .querySelector(`#${REF}-script-browse`)
@@ -233,4 +253,14 @@ function bindPrefEvents(win: Window) {
         true,
       );
     });
+}
+
+/**
+ * Stores the prompt, or clears the pref when it is empty or unchanged from the
+ * built-in one — so later improvements to the default still reach the user.
+ */
+function saveSystemPrompt(value: string) {
+  const keep =
+    value.trim() && value.trim() !== DEFAULT_SYSTEM_PROMPT.trim() ? value : "";
+  Zotero.Prefs.set(`${PREFS}.systemPrompt`, keep, true);
 }

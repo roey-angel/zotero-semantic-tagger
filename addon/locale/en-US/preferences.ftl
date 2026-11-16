@@ -16,3 +16,7 @@ pref-script-label = extract_pdf.py path (optional override):
 pref-browse =
     .label = Browse…
 pref-help = Semantic Tagger v{ $version }
+pref-system-prompt-label = System prompt:
+pref-system-prompt-hint = Placeholders: { "{{tagMin}}" }, { "{{tagMax}}" }, { "{{strictnessInstruction}}" }, { "{{synonymGroups}}" }
+pref-system-prompt-reset =
+    .label = Reset to default

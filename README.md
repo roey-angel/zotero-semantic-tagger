@@ -14,6 +14,7 @@ When a paper is added to your library, the plugin reads its title, abstract, and
 - PDF text extraction using the bundled Python helper (PyMuPDF / pdfplumber)
 - Synonym groups: teach Claude that `CH4`, `methane`, and `natural gas` are the same concept
 - Strictness slider: control how liberally tags are applied
+- Editable system prompt: change the tagging instructions from Zotero's settings
 - Session token budget: warns you when cumulative API usage exceeds a configurable threshold
 
 ## Requirements
@@ -48,6 +49,7 @@ Batch tagging is cheaper because the tag library is cached between calls. Enabli
 | Model                                   | Which Claude model to use. Once an API key is entered, the dropdown lists exactly the models your key can access (fetched live from the Models API); without a key a small default list is shown. Default: `claude-sonnet-5`; `claude-haiku-4-5` is cheaper. |
 | Strictness                              | Controls tag count and selectivity: lax (0) = 6–12 broad tags; strict (100) = 2–4 primary-focus tags only                                                                                                                                                    |
 | Synonym file                            | Path to a `.txt` file defining synonym groups (see below)                                                                                                                                                                                                    |
+| System prompt                           | The instructions sent to Claude. Editable — see [Editing the system prompt](#editing-the-system-prompt). **Reset to default** restores the built-in one.                                                                                                     |
 | Warn after every N tokens               | Show a dialog when cumulative session token usage crosses a multiple of N (0 = never warn)                                                                                                                                                                   |
 | Use PDF text                            | Also extract and send PDF text to Claude (uses more tokens; disabled by default)                                                                                                                                                                             |
 | Python executable                       | Full path to the Python interpreter, or just `python3` if it is on your PATH. Only needed if "Use PDF text" is enabled and Zotero has not indexed the file yet.                                                                                              |
@@ -98,7 +100,7 @@ A single call is made to the selected model (default `claude-sonnet-5`). The pro
 
 ---
 
-**System prompt:**
+**System prompt** (editable in Settings — see [below](#editing-the-system-prompt)):
 
 ```
 You are a scientific literature tagger. Your task is to select tags from a
@@ -106,13 +108,25 @@ provided library that best describe a given paper.
 
 RULES:
 1. You may ONLY use tags from the provided library — never invent new tags.
-2. Select between N and M tags (range set by the strictness slider).
-3. [strictness instruction — varies with the strictness slider; see table below]
+2. Select between {{tagMin}} and {{tagMax}} tags. Stay within this range — it
+   is set by the user's strictness preference.
+3. {{strictnessInstruction}}
 4. Ignore the references/bibliography section of the paper — do not use
    cited works to infer tags.
 5. Return ONLY a JSON array of tag strings, exactly as they appear in the
    library. No explanation.
+{{synonymGroups}}
+```
 
+The `{{...}}` placeholders are filled in before the call, so the model actually
+receives:
+
+```
+2. Select between 4 and 7 tags. Stay within this range — it is set by the
+   user's strictness preference.
+3. Be moderate: select 4–7 tags. Apply a tag if the paper substantially
+   discusses or relies on the concept, even if it is not the primary focus.
+...
 Synonym groups (treat all entries in a group as equivalent):
 methane; CH4; natural gas
 biocrust; biological soil crust; cryptogam; BSC
@@ -149,6 +163,28 @@ The strictness setting controls both the number of tags and how liberally they a
 | **Lax (0–33)**       | 6–12      | Apply a tag if the paper meaningfully mentions, uses, or engages with the concept — even in passing, as background, or in the methods section       |
 | **Moderate (34–66)** | 4–7       | Apply a tag if the paper substantially discusses or relies on the concept, even if it is not the primary focus                                      |
 | **Strict (67–100)**  | 2–4       | Only apply a tag if it describes a central research topic — something the paper directly investigates, develops, or makes a primary contribution to |
+
+### Editing the system prompt
+
+The **System prompt** box in Settings holds the instructions above. Edit it to change how tagging works — e.g. to tag in a different language, to weight method tags over topic tags, or to drop a rule you do not want.
+
+These placeholders are substituted at call time:
+
+| Placeholder                 | Expands to                                                          |
+| --------------------------- | ------------------------------------------------------------------- |
+| `{{tagMin}}`                | Lower bound of the tag count, from the strictness slider            |
+| `{{tagMax}}`                | Upper bound of the tag count, from the strictness slider            |
+| `{{strictnessInstruction}}` | The selectivity rule for the current strictness level (table above) |
+| `{{synonymGroups}}`         | Your synonym groups, or nothing if no synonym file is set           |
+
+Anything else in `{{...}}` is passed through unchanged. Drop a placeholder and that part simply disappears from the prompt — removing `{{tagMin}}`/`{{tagMax}}` and `{{strictnessInstruction}}`, for instance, makes the strictness slider stop affecting the prompt.
+
+Two things are **not** part of the editable prompt and always apply:
+
+- The tag library and the paper content are sent as the user message, not the system prompt.
+- The [safety filter](#safety-filter) below runs regardless of what the prompt says — no prompt can make the plugin invent tags.
+
+**Reset to default** restores the built-in prompt. While the box holds the unmodified default, the plugin tracks the built-in prompt, so an updated default in a later plugin version reaches you automatically; once you edit it, your version is kept.
 
 ### Safety filter
 
